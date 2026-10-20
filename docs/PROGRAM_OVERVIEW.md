@@ -29,6 +29,7 @@ A new page starts with its name in bold at the top and the date and time it was 
 - **Shapes.** Lines, arrows, rectangles, and ellipses, drawn from the right-click menu, with colour and line weight.
 - **Files.** Drop any file onto the page, or use Insert > File Attachment. The file is copied into the page and shown as a card with its name and size. Double-click the card to open the file in its own application. An attached PDF can also be inserted as a printout of its pages, and the text on those pages can then be found by search.
 - **Emails.** A saved email (`.eml` or `.msg`) shows its subject, sender, and date on its card, and its text can be searched.
+- **Spelling.** Misspelled words are underlined in red. Right-click one to choose a suggested spelling, or to add the word to the dictionary.
 - **Signature.** Insert signature puts your name with the date and time at the cursor.
 - **Stacking.** Where objects overlap, right-click any of them and choose Order to bring it to the front, send it to the back, or move it one step forward or back.
 - **Undo.** Undo and redo cover typing as well as creating, moving, resizing, and deleting objects and pages.

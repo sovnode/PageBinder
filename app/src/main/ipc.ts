@@ -252,6 +252,15 @@ export function registerIpc(): void {
   /* ---------- notebooks ---------- */
   ipcMain.handle('notebook:recent', () => readRecent())
   ipcMain.handle('notebook:forget', (_e, root: string) => forgetRecent(root))
+  // Only a notebook in the Recent list can be opened in Finder or Explorer from the start screen.
+  ipcMain.handle('notebook:openFolder', async (_e, root: string) => {
+    if (!(await readRecent()).some((r) => isSameRoot(r.root, root))) throw new Error('That notebook is not in the Recent list.')
+    const err = await shell.openPath(root)
+    if (err) throw new Error(err)
+  })
+  ipcMain.handle('spell:addWord', (e, word: string) => {
+    e.sender.session.addWordToSpellCheckerDictionary(String(word))
+  })
   // At start: a notebook named on the command line (or by the test seam), else the one used last.
   ipcMain.handle('notebook:startupRoot', async () => process.env['PAGEBINDER_OPEN'] ?? process.argv.find((a) => a.endsWith('.pagebinder') || a.includes('notebook.json')) ?? (await readRecent())[0]?.root ?? null)
   ipcMain.handle('notebook:properties', () => notebookProperties(requireRoot()))

@@ -10,6 +10,7 @@ import { SheetBreaks, layoutSheetBreaks, type SheetGeometry } from '../sheetBrea
 import { AnchoredPictures, drawAnchoredPictures, type Corner } from '../anchoredPicturesView'
 import { MIN_PICTURE_SIZE, textAreaWidth } from '@shared/render/anchoredPictures'
 import type { AnchoredPicture } from '@shared/types'
+import { misspellingAt, type Misspelling } from '../spelling'
 
 const MIN_WIDTH = 160
 
@@ -41,7 +42,7 @@ export function TextContainer({
   onDelete: (id: string) => void
   onDragStart: () => void
   zoom: number
-  onContextMenu: (id: string, x: number, y: number, tableEditor: Editor | null, textEditor: Editor | null, extra?: { pictureId?: string; at?: { x: number; y: number } }) => void
+  onContextMenu: (id: string, x: number, y: number, tableEditor: Editor | null, textEditor: Editor | null, extra?: { pictureId?: string; at?: { x: number; y: number }; spelling?: Misspelling }) => void
   onMeasure: (id: string, height: number) => void
   /** Paper geometry, so text crossing a sheet boundary is laid out as it will print. */
   sheet: SheetGeometry
@@ -257,6 +258,8 @@ export function TextContainer({
   const openMenu = (target: HTMLElement, x: number, y: number): void => {
     const cell = target.closest('td, th')
     const inTable = !!cell && !!editor && editor.view.dom.contains(cell)
+    // A misspelled word under the pointer: the menu starts with suggestions for it.
+    const spelling = editor && editor.view.dom.contains(target) ? misspellingAt(editor, x, y) : null
     if (inTable && editor) {
       // Make this editor the active one, and put the caret in the clicked cell
       // unless a group of cells is already highlighted.
@@ -295,7 +298,7 @@ export function TextContainer({
     // Where the click landed in the text area, for Insert picture.
     const area = editor ? (editor.view.dom as HTMLElement).getBoundingClientRect() : null
     const at = area ? { x: Math.max(0, (x - area.left) / zoomRef.current), y: Math.max(0, (y - area.top) / zoomRef.current) } : undefined
-    onContextMenu(obj.id, x, y, inTable && editor ? editor : null, editor ?? null, { at })
+    onContextMenu(obj.id, x, y, inTable && editor ? editor : null, editor ?? null, { at, ...(spelling ? { spelling } : {}) })
   }
 
   const focused = !!editor && active === editor && editor.isFocused

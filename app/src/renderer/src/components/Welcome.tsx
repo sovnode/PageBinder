@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 import { useEffect, useState } from 'react'
 import type { RecentNotebook } from '../../../preload/api'
 import logo from '../assets/logo.png'
+import { ContextMenu } from './ContextMenu'
 
 export function Welcome({
   onCreate,
@@ -17,6 +18,10 @@ export function Welcome({
   onGettingStarted: () => void
 }): JSX.Element {
   const [recent, setRecent] = useState<RecentNotebook[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  /** The right-click menu of a recent notebook. */
+  const [menu, setMenu] = useState<{ x: number; y: number; root: string } | null>(null)
+  const forget = (root: string): void => void window.pagebinder.notebook.forget(root).then(() => window.pagebinder.notebook.recent().then(setRecent))
   useEffect(() => {
     void window.pagebinder.notebook.recent().then(setRecent)
   }, [])
@@ -67,7 +72,14 @@ export function Welcome({
               {recent.map((r) => (
                 <li key={r.root}>
                   <div className="recent-row">
-                    <button type="button" onClick={() => onOpenRecent(r.root)}>
+                    <button
+                      type="button"
+                      onClick={() => onOpenRecent(r.root)}
+                      onContextMenu={(e) => {
+                        e.preventDefault()
+                        setMenu({ x: e.clientX, y: e.clientY, root: r.root })
+                      }}
+                    >
                       <span className="recent-name">{r.name}</span>
                       <span className="recent-path">{r.root}</span>
                     </button>
@@ -75,7 +87,7 @@ export function Welcome({
                       type="button"
                       className="recent-forget"
                       title="Remove from this list (the notebook folder is not touched)"
-                      onClick={() => void window.pagebinder.notebook.forget(r.root).then(() => window.pagebinder.notebook.recent().then(setRecent))}
+                      onClick={() => forget(r.root)}
                     >
                       ×
                     </button>
@@ -85,7 +97,26 @@ export function Welcome({
             </ul>
           </>
         )}
+        {error && <p className="error small">{error}</p>}
       </div>
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          items={[
+            {
+              label: navigator.userAgent.includes('Windows') ? 'Open in Explorer' : 'Open in Finder',
+              onClick: () => {
+                setError(null)
+                window.pagebinder.notebook.openFolder(menu.root).catch((err: unknown) => setError(err instanceof Error ? err.message : String(err)))
+              }
+            },
+            { separator: true },
+            { label: 'Remove from this list', onClick: () => forget(menu.root) }
+          ]}
+          onClose={() => setMenu(null)}
+        />
+      )}
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 
 // Busy cursor: while any request to the main process has been running for more
 // than a moment, the page shows a progress cursor and ignores nothing else.
@@ -36,6 +36,7 @@ const api = {
     properties: () => invoke('notebook:properties'),
     startupRoot: () => invoke('notebook:startupRoot'),
     forget: (root: string) => invoke('notebook:forget', root),
+    openFolder: (root: string) => invoke('notebook:openFolder', root),
     pickFolder: () => invoke('notebook:pickFolder'),
     pickParent: () => invoke('notebook:pickParent'),
     create: (parentDir: string, name: string) => invoke('notebook:create', parentDir, name),
@@ -100,6 +101,11 @@ const api = {
       ipcRenderer.on('index:progress', listener)
       return () => ipcRenderer.removeListener('index:progress', listener)
     }
+  },
+  spell: {
+    isMisspelled: (word: string) => webFrame.isWordMisspelled(word),
+    suggestions: (word: string) => webFrame.getWordSuggestions(word),
+    addToDictionary: (word: string) => invoke('spell:addWord', word)
   },
   file: {
     open: (rel: string) => invoke('file:open', rel),

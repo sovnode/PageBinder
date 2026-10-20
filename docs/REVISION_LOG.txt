@@ -10,6 +10,11 @@ versions before it. Nothing ever needs converting.
 Version 1.2.1 - in development (not yet released)
 -------------------------------------------------
 
+- Right-click a word underlined in red to see suggested spellings at the top
+  of the menu. Choose one to replace the word, or choose Add to dictionary.
+- Right-click a notebook in the start screen's Recent list to open its folder
+  in Finder (Explorer on Windows), or to remove it from the list.
+
 
 Version 1.2.0 - 13 October 2026
 -------------------------------

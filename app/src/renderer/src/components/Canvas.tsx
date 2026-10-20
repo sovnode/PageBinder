@@ -18,6 +18,7 @@ import { defaultLineHeight, newParagraphAttrs, setDefaultLineHeight } from '../t
 import { TEXT_IMAGE_WIDTHS } from '@shared/render/textImage'
 import { NodeSelection } from '@tiptap/pm/state'
 import type { AnchoredPicture } from '@shared/types'
+import { replaceMisspelling, addToDictionary, type Misspelling } from '../spelling'
 
 function newId(): string {
   const bytes = new Uint8Array(12)
@@ -140,7 +141,7 @@ export function Canvas({
   const suppressClickRef = useRef(false)
   const [heights, setHeights] = useState<Record<string, number>>({})
   const [guides, setGuides] = useState<{ x?: number; y?: number }>({})
-  const [objectMenu, setObjectMenu] = useState<{ id: string; x: number; y: number; tableEditor?: Editor | null; textEditor?: Editor | null; extra?: { pictureId?: string; at?: { x: number; y: number } } } | null>(null)
+  const [objectMenu, setObjectMenu] = useState<{ id: string; x: number; y: number; tableEditor?: Editor | null; textEditor?: Editor | null; extra?: { pictureId?: string; at?: { x: number; y: number }; spelling?: Misspelling } } | null>(null)
 
   // A new text box takes focus once; the id is cleared so undo or redo cannot re-focus it.
   useEffect(() => {
@@ -574,7 +575,7 @@ export function Canvas({
   const relFor = (o: CanvasObject): string => (o.kind === 'file' ? `${pageRel}/attachments/${o.name}` : `${pageRel}/images/${(o as { name: string }).name}`)
 
   const [borderWeight, setBorderWeight] = useState<BorderWeight>('thin')
-  const menuItems = (id: string, tableEditor: Editor | null = null, textEditor: Editor | null = null, extra?: { pictureId?: string; at?: { x: number; y: number } }): MenuItem[] => {
+  const menuItems = (id: string, tableEditor: Editor | null = null, textEditor: Editor | null = null, extra?: { pictureId?: string; at?: { x: number; y: number }; spelling?: Misspelling }): MenuItem[] => {
     const obj = doc.objects.find((o) => o.id === id)
     if (!obj) return []
     const orderIds = selectedIds.has(id) && selectedIds.size > 1 ? new Set(selectedIds) : new Set([id])
@@ -618,6 +619,13 @@ export function Canvas({
     if (obj.kind === 'text') {
       const items: MenuItem[] = []
       const ed = tableEditor ?? textEditor
+      // A misspelled word was right-clicked: its suggestions come first, as in a word processor.
+      const spelling = extra?.spelling
+      if (ed && spelling) {
+        if (spelling.suggestions.length) items.push(...spelling.suggestions.map((s) => ({ label: s, className: 'spelling-suggestion', onClick: () => replaceMisspelling(ed, spelling, s) })))
+        else items.push({ label: 'No spelling suggestions', disabled: true })
+        items.push({ label: 'Add to dictionary', onClick: () => void addToDictionary(ed, spelling) }, { separator: true })
+      }
       if (ed) {
         // A picture inside the text is selected: its wrap and size.
         const sel = ed.state.selection

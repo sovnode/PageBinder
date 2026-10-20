@@ -340,6 +340,7 @@ html[data-busy] * { cursor: progress !important; }
 .context-item.has-sub { display: flex; justify-content: space-between; align-items: center; }
 .sub-arrow { color: var(--muted); }
 .context-item:disabled { opacity: 0.45; cursor: default; }
+.context-item.spelling-suggestion { font-weight: 600; }
 .context-heading { padding: 6px 10px 2px; font-size: 11px; font-weight: 600; color: var(--muted); }
 
 /* Format painter armed: a brush pointer over text. */

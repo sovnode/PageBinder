@@ -24,6 +24,8 @@ export interface MenuItem {
   disabled?: boolean
   /** A heading over the items that follow (not clickable). */
   heading?: boolean
+  /** Extra class for the item, for a different look. */
+  className?: string
 }
 
 function ColorPalette({ pick, onDone }: { pick: ColorPick; onDone: () => void }): JSX.Element {
@@ -132,7 +134,7 @@ export function ContextMenu({ x, y, items: rootItems, onClose }: { x: number; y:
           <button
             key={i}
             type="button"
-            className={`context-item${item.submenu ? ' has-sub' : ''}`}
+            className={`context-item${item.submenu ? ' has-sub' : ''}${item.className ? ` ${item.className}` : ''}`}
             disabled={item.disabled}
             onClick={() => {
               if (item.submenu) {

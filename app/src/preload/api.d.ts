@@ -120,6 +120,8 @@ export interface PageBinderApi {
     properties(): Promise<NotebookProperties>
     startupRoot(): Promise<string | null>
     forget(root: string): Promise<void>
+    /** Open a recent notebook's folder in Finder or Explorer. */
+    openFolder(root: string): Promise<void>
     pickFolder(): Promise<string | null>
     pickParent(): Promise<string | null>
     create(parentDir: string, name: string): Promise<NotebookTree>
@@ -176,6 +178,12 @@ export interface PageBinderApi {
     status(): Promise<IndexProgress>
     rebuild(): Promise<void>
     onProgress(handler: (p: IndexProgress) => void): () => void
+  }
+  /** The window's spelling checker, the one that underlines misspelled words in red. */
+  spell: {
+    isMisspelled(word: string): boolean
+    suggestions(word: string): string[]
+    addToDictionary(word: string): Promise<void>
   }
   file: {
     open(rel: string): Promise<void>
