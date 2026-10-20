@@ -21,6 +21,10 @@ Pictures anchored in text boxes, with text flowing beside them, were built on 20
 
 - **Spelling suggestions on right-click** (requested 2026-10-18). Misspelled words get the red underline from the spelling checker built into the window (`spellcheck: true` in `app/src/main/index.ts`; macOS and Windows supply the dictionaries), but right-clicking one opens PageBinder's own text-box menu, which offers no suggestions. The menu would start with the top few suggestions for the underlined word (perhaps five); choosing one replaces the word, and "Add to dictionary" could follow them. Electron reports the misspelled word and its suggestions with each right-click (the `context-menu` event's `misspelledWord` and `dictionarySuggestions`) and replaces the word with `replaceMisspelling`. The work is getting those into the app's own menu, since it stops the browser's menu from opening. About half a day to a day, checked on macOS and Windows.
 
+## Start screen
+
+- **Show a recent notebook's folder** (requested 2026-10-19). Right-clicking a notebook in the start screen's Recent list would offer *Show in Finder* (*Show in Explorer* on Windows), opening the notebook's folder with the system file manager (`shell.showItemInFolder`, as the right-click menu for attachments already does). The menu could also hold the existing *Remove from this list*. About an hour or two.
+
 ## Sharing and export
 
 Reworked 2026-09-29 at the user's request, to replace today's separate commands with one consistent set. On 2026-10-01 the user chose to keep the existing dialog and menus for now; only the HTML option changed, into the web-page package described under 2 below (built in 1.1.3). The rest stays for consideration.
