@@ -17,6 +17,13 @@ Entry format:
 
 ---
 
+## 2026-10-20 · lead (macOS, Apple silicon) · main
+**Changed:** 1.2.1 work: spelling suggestions on right-click (up to five, in bold, then Add to dictionary) and *Open in Finder/Explorer* plus *Remove from this list* on a recent notebook's right-click menu on the start screen. Built as the v1.2.1 draft at the user's request, for testing on Windows.
+**Found:** Electron's `context-menu` event reported no misspelled word on macOS when tried, but `webFrame.isWordMisspelled` and `getWordSuggestions` use the system checker and work; the app uses those. macOS does not flag every typo (it accepts "Teh").
+**Checked:** Type check, 96 unit tests, and every end-to-end suite (142 s), including the new `scripts/e2e-spelling.ts`. The user tried both features in the running app on the Mac.
+**Next platform must check:** Windows, from the v1.2.1 draft's installer: right-click a red-underlined word (for example "recieve") in a text box; suggestions appear first, choosing one replaces the word, Add to dictionary removes the underline. On the start screen, right-click a recent notebook: *Open in Explorer* opens its folder, *Remove from this list* removes it. Before working on Windows, update that clone as the 2026-10-15 note says.
+**Open:** v1.2.1 is a draft only.
+
 ## 2026-10-15 · lead (macOS, Apple silicon) · main
 **Changed:** At the user's request (a strict rule: nothing on GitHub may contain personal information), the whole history was rewritten and force-pushed. One commit message that named the owner was cleaned, and every commit and tag now records UTC instead of the local time zone. The files in every commit are unchanged. All commit IDs changed; every tag, the published v1.2.0 included, was moved to its rewritten commit, and these notes quote the new IDs. `CLAUDE.md`, `DECISIONS.md`, and `/handoff` now carry the rule: commit and tag with `TZ=UTC`, and check commit messages and image or document metadata before pushing. The lead Mac's clone has a local pre-push hook that refuses anything else.
 **Found:** An audit of everything on GitHub found only that one name and the time zones: every commit and its message, every tag, every file in every version, the metadata of every image and document, all releases and their notes, the profile, the public activity feed, and the Actions runs. GitHub can still show the old commits at their direct links until it cleans up; the account owner can ask GitHub Support to purge them.
@@ -154,10 +161,3 @@ Entry format:
 **Found (after push):** On GitHub's Windows machine, the ribbon's spacing dropdown applied only to the paragraph with the cursor: choosing from a dropdown moved focus and Chromium on Windows collapsed the highlight. The ribbon now restores the last selection made in the text before any dropdown command (font, size, spacing). Also, the phase 8 full-screen toggle is skipped when the test window is not the active one (someone using the Mac), checking only the single menu item then.
 **Next platform must check:** Windows: line spacing from the ribbon and the right-click menu; a long double-spaced text box across a page break looks the same on screen and in Print Preview.
 **Open:** Word wrap option still to be chosen.
-
-## 2026-09-26 · lead (macOS, Apple silicon) · main
-**Changed:** (1) Text boxes that cross a page break now look in the editor as they print: `app/src/renderer/src/sheetBreaks.ts` applies the print script's push rule live as node decorations, recalculated on edit, move, resize, paper change, and zoom. (2) Order submenu (bring to front, bring forward, send backward, send to back) on every object's right-click menu and on multi-selections; objects stack in list order everywhere, so it reorders the page's object list. (3) Word wrap options written up in `docs/dev/FUTURE_FEATURES.md`, awaiting the user's choice.
-**Found:** Printing had always pushed blocks past sheet boundaries; the editor never did, which is why the two differed. Pictures and attachments placed across a page break are deliberately not handled, as agreed with the user.
-**Checked:** See the commit: unit tests, and the window suites including two new phase 8 steps (editor and page.html push the same lines by the same amounts; Order commands, their stacking in the editor and page.html, and undo).
-**Next platform must check:** Windows: a long text box across a page break looks the same on screen and in Print Preview; Order works on overlapping objects.
-**Open:** Choice of word wrap option.
