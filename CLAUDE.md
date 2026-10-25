@@ -9,11 +9,16 @@ Local-only, folder-based notebook app in the style of classic desktop OneNote (f
 - The repository is meant to be public. The repository is `sovnode/PageBinder` (the GitHub account was renamed from PageBinder to sovnode on 13 October 2026; GitHub redirects the old links). Commit as `PageBinder <4245724+sovnode@users.noreply.github.com>`. Commit messages carry no `Co-Authored-By` or `Claude-Session` lines, and the owner's personal name and email appear nowhere in the repository. Installers are unsigned (macOS ad-hoc, no Windows certificate).
 - Unverified: the native Outlook email drag-and-drop helper (the user cannot test it yet).
 
-## Backward compatibility (the user's standing rule, 2026-09-27)
-Every revision must open, show, edit, print, and search notebooks written by any earlier revision published on GitHub, from commit `ba723ae` (27 September 2026) onward, with no manual conversion and nothing lost.
+## Backward compatibility (the user's standing rule, 2026-09-27; replaced 2026-10-25)
+Every release must be fully backward compatible with the previous release: it opens, shows, edits, prints, and searches notebooks made with the previous release, with nothing lost, and **every new feature also works in notebooks made with the previous release**. Users are assumed to run the current release, so notebooks from older releases than the previous one need no planning.
 - **Stop and ask first.** If a request, or a way of building it, would break this, stop before changing anything and ask the user for explicit permission. Explain what would break and offer a compatible alternative.
-- **What counts as breaking:** removing or renaming anything stored in `notebook.json`, `section.json`, `group.json`, `page.json`, or a template; changing what an existing field means; requiring a field that older files lack; converting or rewriting files on open; moving or renaming files inside a notebook; or changing how existing content lays out or prints.
-- **What is fine:** new optional fields that older files simply lack (as with `printout`, `indent`, and `lineHeight`), new files beside the existing ones, and changes to `.index/`, which is a cache that rebuilds itself.
+- **What counts as breaking:** removing or renaming anything stored in `notebook.json`, `section.json`, `group.json`, `page.json`, or a template; changing what an existing field means; requiring a field that older files lack; converting or rewriting files on open; moving or renaming files inside a notebook; changing how existing content lays out or prints; or a new feature that does not work in a notebook made with the previous release.
+- **What is fine:** new optional fields that older files simply lack (as with `printout`, `indent`, `lineHeight`, and `titleSource`), new files beside the existing ones, and changes to `.index/`, which is a cache that rebuilds itself.
+- **When a new feature needs a notebook upgraded,** the release that brings the feature must include the upgrade, built into PageBinder:
+  - Offer it as a choice when a notebook from the previous release is opened; never upgrade without asking.
+  - Never overwrite or change the original. Write the upgraded notebook as a new notebook in the same parent folder, with the PageBinder version in its name, for example `Farm records (PageBinder 1.3.0)`.
+  - Show progress (what is being done, how far along) whenever the upgrade takes more than a moment.
+  - Check it like any feature: unit tests, an end-to-end check that upgrades a notebook made with the previous release and opens the copy, and the user's own test before release.
 - **Exception, templates only (the user's decision, 2026-10-13):** templates kept by earlier versions (`.template` folders) and section defaults naming them are not carried into the Templates notebook ("you do not need to make the new version compatible with the old version at this time"). Their files are left in place. Notebooks and pages are covered as before; see `docs/dev/DECISIONS.md`.
 
 ## Published releases (the user's standing rule, 2026-09-28)
