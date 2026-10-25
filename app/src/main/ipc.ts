@@ -405,9 +405,11 @@ export function registerIpc(): void {
     const rel = await livePage(relIn)
     const result = await savePage(root, rel, doc, historyPolicy())
     await reindexPage(result.relPath, result.doc, rel)
-    // A new name moved the folder (a page named after its first line of text): follow it, and reopen it there next time.
+    // A new name moved the folder (a page named after its first line of text): follow it, keep the
+    // page in its place in the list (the index re-reads the section's order), and reopen it there next time.
     if (result.relPath !== rel) {
       notePageMoved(rel, result.relPath)
+      await indexer?.refreshSection(parentOf(result.relPath)).catch(() => undefined)
       rememberLastPage(root, result.relPath)
     }
     return result

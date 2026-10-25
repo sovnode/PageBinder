@@ -212,6 +212,14 @@ async function main(): Promise<void> {
   const firstName = await activeName()
   assert(!firstName.includes('{{'), `the name has its placeholder filled (${firstName})`)
   // Editing that line renames the page: in the page list at once, and its folder when it is saved.
+  // The page keeps its place in the list throughout.
+  const placeOf = async (): Promise<{ at: number; others: string[] }> =>
+    page.evaluate(() => {
+      const rows = Array.from(document.querySelectorAll('.page-row:not(.add)'))
+      const at = rows.findIndex((r) => r.classList.contains('on'))
+      return { at, others: rows.filter((_, i) => i !== at).map((r) => r.querySelector('.page-title-text')?.textContent ?? '') }
+    })
+  const placeBefore = await placeOf()
   await page.locator('.text-container .tiptap', { hasText: 'Original template text' }).first().click()
   await page.keyboard.press(docEnd)
   await page.keyboard.type(' at Ridge Road')
@@ -229,6 +237,8 @@ async function main(): Promise<void> {
   const errorShown = await page.locator('.error-bar').count() ? await page.locator('.error-bar').innerText() : ''
   assert(!errorShown, `clicking the page's name after editing its first line shows no error (${errorShown})`)
   assert((await activeName()).endsWith(' at Ridge Road') && (await page.locator('.text-container', { hasText: 'at Ridge Road' }).count()) > 0, 'the page is still open, with its text')
+  const placeAfter = await placeOf()
+  assert(JSON.stringify(placeAfter) === JSON.stringify(placeBefore), `the page keeps its place in the list when its new name moves its folder (${JSON.stringify(placeBefore)} -> ${JSON.stringify(placeAfter)})`)
   // Renaming the page by hand ends the link for good, even straight after an unsaved edit to the line:
   // later edits to the line leave the name alone.
   await page.locator('.text-container .tiptap', { hasText: 'Original template text' }).first().click()
@@ -248,6 +258,7 @@ async function main(): Promise<void> {
   const renamedDoc = await readDoc(madeDir)
   assert(renamedDoc.title === 'Site visit' && !renamedDoc.titleSource && JSON.stringify(renamedDoc.objects).includes('Ridge Road today and more'), `after a rename the name stays, whatever the line says (${renamedDoc.title})`)
   assert(!(await page.locator('.error-bar').count()), 'renaming straight after an edit shows no error')
+  assert(JSON.stringify((await placeOf()).at) === JSON.stringify(placeBefore.at), 'the renamed page keeps its place in the list')
   assert((await activeName()) === 'Site visit', 'the page list keeps the chosen name')
   const madeText = JSON.stringify((await readDoc(madeDir)).objects)
   assert(madeText.includes('plus an edit made ') && !madeText.includes('{{date}}'), `the page carries the template's edit, its placeholder filled (${madeText.slice(0, 160)})`)
