@@ -136,6 +136,18 @@ export function App(): JSX.Element {
     if (from === to) return
     for (const stack of [undoStack.current, redoStack.current]) for (const e of stack) if (e.pageRel === from) e.pageRel = to
   }
+  /**
+   * A page's folder moved (a new name renames it when the page is saved, and a page named after its
+   * first line of text gets new names as it is edited): undo, the naming box, and the page clipboard
+   * follow it.
+   */
+  const followMovedPage = (from: string, to: string): void => {
+    if (from === to) return
+    remapHistory(from, to)
+    setRenamingRel((r) => (r === from ? to : r))
+    if (freshPageRel.current === from) freshPageRel.current = to
+    setCopiedPages((c) => (c && c.root === treeRef.current?.root && c.pages.some((p) => p.relPath === from) ? { ...c, pages: c.pages.map((p) => (p.relPath === from ? { ...p, relPath: to } : p)) } : c))
+  }
 
   const fail = (err: unknown): void => setError(err instanceof Error ? err.message : String(err))
 
@@ -164,7 +176,7 @@ export function App(): JSX.Element {
     const run = (async () => {
       try {
         const result = await window.pagebinder.page.save(p.relPath, p.doc)
-        remapHistory(p.relPath, result.relPath)
+        followMovedPage(p.relPath, result.relPath)
         setPage((cur) => {
           if (!cur || cur.relPath !== p.relPath) return cur
           const stillDirty = cur.version !== p.version
@@ -670,10 +682,14 @@ export function App(): JSX.Element {
     try {
       await savePage()
       const result = await window.pagebinder.page.rename(rel, title, { firstName })
-      remapHistory(rel, result.relPath)
+      // `rel` may be a moment out of date: saving the page just now may have moved its folder (a page
+      // named after its first line of text). `result.from` is the folder that was renamed.
+      followMovedPage(result.from, result.relPath)
+      followMovedPage(rel, result.relPath)
       setTree(result.tree)
-      if (pageRef.current?.relPath === rel) {
-        setPage((cur) => (cur ? { ...cur, relPath: result.relPath, doc: result.doc, dirty: false, version: 0 } : cur))
+      const open = (r: string | undefined): boolean => r === rel || r === result.from
+      if (open(pageRef.current?.relPath)) {
+        setPage((cur) => (cur && open(cur.relPath) ? { ...cur, relPath: result.relPath, doc: result.doc, dirty: false, version: 0 } : cur))
         setSaveStatus('saved')
         // Text boxes read their text once; the title block's new name needs a fresh draw.
         if (firstName) setCanvasEpoch((n) => n + 1)

@@ -216,10 +216,25 @@ async function main(): Promise<void> {
   await page.keyboard.press(docEnd)
   await page.keyboard.type(' at Ridge Road')
   await page.waitForFunction(() => (document.querySelector('.page-row.on .page-title-text')?.textContent ?? '').endsWith(' at Ridge Road'))
-  await saveViaMenu(page)
-  const synced = await pageTitled(join(root, sec), `${firstName} at Ridge Road`)
+  // Clicking the page's own name now saves it, which moves its folder to the new name; the page
+  // must open from there (it once failed, looking in the old folder).
+  await page.locator('.page-row.on').click()
+  let synced: Awaited<ReturnType<typeof pageTitled>> = null
+  for (let i = 0; i < 50 && !synced; i++) {
+    synced = await pageTitled(join(root, sec), `${firstName} at Ridge Road`)
+    if (!synced) await page.waitForTimeout(100)
+  }
   assert(synced?.doc.titleSource, `the page was saved under the new name and still follows its text (${await pagesIn(join(root, sec))})`)
-  // Renaming the page by hand ends the link for good: later edits to the line leave the name alone.
+  await page.waitForTimeout(300)
+  const errorShown = await page.locator('.error-bar').count() ? await page.locator('.error-bar').innerText() : ''
+  assert(!errorShown, `clicking the page's name after editing its first line shows no error (${errorShown})`)
+  assert((await activeName()).endsWith(' at Ridge Road') && (await page.locator('.text-container', { hasText: 'at Ridge Road' }).count()) > 0, 'the page is still open, with its text')
+  // Renaming the page by hand ends the link for good, even straight after an unsaved edit to the line:
+  // later edits to the line leave the name alone.
+  await page.locator('.text-container .tiptap', { hasText: 'Original template text' }).first().click()
+  await page.keyboard.press(docEnd)
+  await page.keyboard.type(' today')
+  await page.waitForFunction(() => (document.querySelector('.page-row.on .page-title-text')?.textContent ?? '').endsWith(' today'))
   await page.locator('.page-row.on').click({ button: 'right' })
   await page.locator('.context-item', { hasText: /^Rename/ }).click()
   await page.locator('.page-row.renaming input').fill('Site visit')
@@ -231,7 +246,8 @@ async function main(): Promise<void> {
   await saveViaMenu(page)
   const madeDir = join(root, sec, 'Site visit.page')
   const renamedDoc = await readDoc(madeDir)
-  assert(renamedDoc.title === 'Site visit' && !renamedDoc.titleSource && JSON.stringify(renamedDoc.objects).includes('Ridge Road and more'), `after a rename the name stays, whatever the line says (${renamedDoc.title})`)
+  assert(renamedDoc.title === 'Site visit' && !renamedDoc.titleSource && JSON.stringify(renamedDoc.objects).includes('Ridge Road today and more'), `after a rename the name stays, whatever the line says (${renamedDoc.title})`)
+  assert(!(await page.locator('.error-bar').count()), 'renaming straight after an edit shows no error')
   assert((await activeName()) === 'Site visit', 'the page list keeps the chosen name')
   const madeText = JSON.stringify((await readDoc(madeDir)).objects)
   assert(madeText.includes('plus an edit made ') && !madeText.includes('{{date}}'), `the page carries the template's edit, its placeholder filled (${madeText.slice(0, 160)})`)

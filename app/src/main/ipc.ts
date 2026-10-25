@@ -19,6 +19,7 @@ import {
 import { addImageBytes, addImageFile } from './storage/images'
 import { copyFileIntoPage, readMailMeta, ATTACHMENTS_DIR } from './storage/attachments'
 import { resolveInside } from './storage/paths'
+import { exists } from './storage/atomic'
 import { printPage, exportPdf, exportPages } from './print'
 import { Indexer, type IndexProgress } from './search/indexer'
 import { applyTreeToIndex } from './search/tree'
@@ -102,6 +103,28 @@ async function indexArrivedPage(rel: string): Promise<void> {
   if (doc) await reindexPage(rel, doc)
 }
 
+/**
+ * Page folders that moved in this session: a new name renames a page's folder when it is saved, and a
+ * page named after its first line of text gets new names as it is edited. A request that still names
+ * the old folder (from a page list, menu, or clipboard a moment out of date) is followed to the page.
+ */
+const movedPages = new Map<string, string>()
+
+function notePageMoved(from: string, to: string): void {
+  if (from === to) return
+  for (const [k, v] of movedPages) if (v === from) movedPages.set(k, to)
+  movedPages.set(from, to)
+  movedPages.delete(to)
+}
+
+/** Where a page's folder is now: `rel` itself while it exists, else where it moved in this session. */
+async function livePage(rel: string): Promise<string> {
+  const root = requireRoot()
+  let cur = rel
+  for (let hops = 0; hops < 50 && movedPages.has(cur) && !(await exists(resolveInside(root, cur))); hops++) cur = movedPages.get(cur)!
+  return cur
+}
+
 /** Full background reconcile from a fresh folder scan; used after wide changes. */
 function reconcileSoon(): void {
   if (!currentRoot || !indexer) return
@@ -131,6 +154,7 @@ async function openAndLock(root: string): Promise<NotebookTree> {
   }
   if (currentRoot && currentRoot !== root) await releaseLock(currentRoot)
   indexer?.close()
+  movedPages.clear()
   currentRoot = root
   indexer = new Indexer(root, (p: IndexProgress) => broadcast('index:progress', p))
   indexer.onTreeChanged = () => broadcast('tree:changed', null)
@@ -224,6 +248,7 @@ function historyPolicy(): HistoryPolicy {
 export async function closeCurrentNotebook(): Promise<void> {
   indexer?.close()
   indexer = undefined
+  movedPages.clear()
   if (currentRoot) {
     await releaseLock(currentRoot)
     currentRoot = undefined
@@ -233,6 +258,7 @@ export async function closeCurrentNotebook(): Promise<void> {
 export function closeCurrentNotebookSync(): void {
   indexer?.close()
   indexer = undefined
+  movedPages.clear()
   if (currentRoot) {
     releaseLockSync(currentRoot)
     currentRoot = undefined
@@ -362,8 +388,9 @@ export function registerIpc(): void {
     await ensureTemplatesNotebook(dir)
     return openAndLock(dir)
   })
-  ipcMain.handle('page:load', async (_e, rel: string) => {
+  ipcMain.handle('page:load', async (_e, relIn: string) => {
     const root = requireRoot()
+    const rel = await livePage(relIn)
     const result = await loadPage(root, rel)
     rememberLastPage(root, rel)
     // A page restored from history on load may have a different title than the index knows.
@@ -373,27 +400,33 @@ export function registerIpc(): void {
     }
     return { ...result, relPath: rel }
   })
-  ipcMain.handle('page:save', async (_e, rel: string, doc: PageDoc) => {
+  ipcMain.handle('page:save', async (_e, relIn: string, doc: PageDoc) => {
     const root = requireRoot()
+    const rel = await livePage(relIn)
     const result = await savePage(root, rel, doc, historyPolicy())
     await reindexPage(result.relPath, result.doc, rel)
-    // A new name (a page named after its first line of text) moved the folder: reopen it there next time.
-    if (result.relPath !== rel) rememberLastPage(root, result.relPath)
+    // A new name moved the folder (a page named after its first line of text): follow it, and reopen it there next time.
+    if (result.relPath !== rel) {
+      notePageMoved(rel, result.relPath)
+      rememberLastPage(root, result.relPath)
+    }
     return result
   })
-  ipcMain.handle('page:saveDraft', async (_e, rel: string, doc: PageDoc) => saveDraft(requireRoot(), rel, doc))
-  ipcMain.handle('page:discardDraft', async (_e, rel: string) => discardDraft(requireRoot(), rel))
-  ipcMain.handle('page:listHistory', async (_e, rel: string) => listHistory(requireRoot(), rel))
-  ipcMain.handle('page:readSnapshot', async (_e, rel: string, name: string) => readSnapshot(requireRoot(), rel, name))
-  ipcMain.handle('page:rename', async (_e, rel: string, title: string, opts?: { firstName?: boolean }) => {
+  ipcMain.handle('page:saveDraft', async (_e, rel: string, doc: PageDoc) => saveDraft(requireRoot(), await livePage(rel), doc))
+  ipcMain.handle('page:discardDraft', async (_e, rel: string) => discardDraft(requireRoot(), await livePage(rel)))
+  ipcMain.handle('page:listHistory', async (_e, rel: string) => listHistory(requireRoot(), await livePage(rel)))
+  ipcMain.handle('page:readSnapshot', async (_e, rel: string, name: string) => readSnapshot(requireRoot(), await livePage(rel), name))
+  ipcMain.handle('page:rename', async (_e, relIn: string, title: string, opts?: { firstName?: boolean }) => {
     const root = requireRoot()
+    const rel = await livePage(relIn)
     const result = await renamePage(root, rel, title, opts ?? {})
+    notePageMoved(rel, result.relPath)
     rememberLastPage(root, result.relPath)
     await reindexPage(result.relPath, result.doc, rel)
-    return { ...result, tree: await afterSectionChange(parentOf(rel)) }
+    return { ...result, from: rel, tree: await afterSectionChange(parentOf(rel)) }
   })
   ipcMain.handle('page:addImage', async (_e, rel: string, originalName: string, bytes: ArrayBuffer | Uint8Array) =>
-    addImageBytes(requireRoot(), rel, originalName, Buffer.from(bytes as Uint8Array))
+    addImageBytes(requireRoot(), await livePage(rel), originalName, Buffer.from(bytes as Uint8Array))
   )
   ipcMain.handle('page:pickImages', async (_e, rel: string) => {
     // Test seam: automated checks cannot drive the native dialog (the same one Attach files uses).
@@ -407,18 +440,21 @@ export function registerIpc(): void {
         })
     if (result.canceled) return []
     const root = requireRoot()
+    const page = await livePage(rel)
     const entries = []
-    for (const file of result.filePaths) entries.push(await addImageFile(root, rel, file))
+    for (const file of result.filePaths) entries.push(await addImageFile(root, page, file))
     return entries
   })
-  ipcMain.handle('page:addImagePaths', async (_e, rel: string, paths: string[]) => {
+  ipcMain.handle('page:addImagePaths', async (_e, relIn: string, paths: string[]) => {
     const root = requireRoot()
+    const rel = await livePage(relIn)
     const entries = []
     for (const p of paths) entries.push(await addImageFile(root, rel, p))
     return entries
   })
-  ipcMain.handle('page:addFiles', async (_e, rel: string, paths: string[]) => {
+  ipcMain.handle('page:addFiles', async (_e, relIn: string, paths: string[]) => {
     const root = requireRoot()
+    const rel = await livePage(relIn)
     const results = []
     for (const p of paths) {
       const entry = await copyFileIntoPage(root, rel, p, ATTACHMENTS_DIR)
@@ -427,12 +463,13 @@ export function registerIpc(): void {
     }
     return results
   })
-  ipcMain.handle('page:pickFiles', async (_e, rel: string) => {
+  ipcMain.handle('page:pickFiles', async (_e, relIn: string) => {
     // Test seam: automated checks cannot drive the native dialog.
     const preset = process.env['PAGEBINDER_TEST_PICK_FILES']
     const filePaths = preset ? preset.split('\n').filter(Boolean) : await pickPaths('Attach files')
     if (!filePaths.length) return []
     const root = requireRoot()
+    const rel = await livePage(relIn)
     const results = []
     for (const p of filePaths) {
       const entry = await copyFileIntoPage(root, rel, p, ATTACHMENTS_DIR)
@@ -446,16 +483,19 @@ export function registerIpc(): void {
   ipcMain.handle('page:copyFilesBetween', async (_e, fromRel: string, toRel: string, items: { sub: 'images' | 'attachments'; name: string; originalName?: string }[], fromRoot?: string) => {
     const root = requireRoot()
     const sourceRoot = fromRoot && !isSameRoot(fromRoot, root) ? await knownNotebookRoot(fromRoot) : root
+    const from = sourceRoot === root ? await livePage(fromRel) : fromRel
+    const to = await livePage(toRel)
     const out: { sub: 'images' | 'attachments'; from: string; entry: import('../shared/types').FileEntry }[] = []
     for (const it of items) {
-      const src = resolveInside(sourceRoot, `${fromRel}/${it.sub}/${it.name}`)
-      const entry = await copyFileIntoPage(root, toRel, src, it.sub, it.originalName ?? it.name)
+      const src = resolveInside(sourceRoot, `${from}/${it.sub}/${it.name}`)
+      const entry = await copyFileIntoPage(root, to, src, it.sub, it.originalName ?? it.name)
       out.push({ sub: it.sub, from: it.name, entry })
     }
     return out
   })
-  ipcMain.handle('page:readAttachment', async (_e, rel: string, sub: 'images' | 'attachments', name: string) => {
+  ipcMain.handle('page:readAttachment', async (_e, relIn: string, sub: 'images' | 'attachments', name: string) => {
     const root = requireRoot()
+    const rel = await livePage(relIn)
     const { promises: fsp } = await import('node:fs')
     const data = await fsp.readFile(resolveInside(root, `${rel}/${sub}/${name}`))
     return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength)
@@ -469,19 +509,23 @@ export function registerIpc(): void {
     shell.showItemInFolder(resolveInside(requireRoot(), rel))
   })
   /* ---------- history, recycle, verify ---------- */
-  ipcMain.handle('page:snapshotHtml', async (_e, rel: string, name: string) => {
+  ipcMain.handle('page:snapshotHtml', async (_e, relIn: string, name: string) => {
+    const rel = await livePage(relIn)
     const snap = await readSnapshot(requireRoot(), rel, name)
     if (!snap) throw new Error('That version could not be read.')
     return renderPageHtml(snap, { imageBase: `${notebookUrl(rel)}/images/`, attachmentBase: `${notebookUrl(rel)}/attachments/` })
   })
-  ipcMain.handle('page:restoreSnapshot', async (_e, rel: string, name: string) => {
+  ipcMain.handle('page:restoreSnapshot', async (_e, relIn: string, name: string) => {
     const root = requireRoot()
+    const rel = await livePage(relIn)
     const result = await restoreSnapshot(root, rel, name, historyPolicy())
+    notePageMoved(rel, result.relPath)
     await reindexPage(result.relPath, result.doc, rel)
     return { ...result, tree: await afterSectionChange(parentOf(rel)) }
   })
-  ipcMain.handle('page:copySnapshot', async (_e, rel: string, name: string) => {
+  ipcMain.handle('page:copySnapshot', async (_e, relIn: string, name: string) => {
     const root = requireRoot()
+    const rel = await livePage(relIn)
     const created = await copySnapshotToNewPage(root, rel, name, historyPolicy())
     await reindexPage(created.relPath, created.doc)
     return { relPath: created.relPath, tree: await afterSectionChange(parentOf(rel)) }
@@ -523,7 +567,7 @@ export function registerIpc(): void {
   ipcMain.handle('template:save', async (_e, pageRel: string, sectionRel: string, name: string) => {
     const dir = templatesNotebookDir()
     await ensureTemplatesNotebook(dir)
-    await saveAsTemplate(requireRoot(), pageRel, dir, sectionRel, name)
+    await saveAsTemplate(requireRoot(), await livePage(pageRel), dir, sectionRel, name)
     return listTemplates(dir)
   })
   ipcMain.handle('template:createPage', async (_e, sectionRel: string, ref: string, title?: string) => {
@@ -543,9 +587,11 @@ export function registerIpc(): void {
   })
 
   /* ---------- move and copy ---------- */
-  ipcMain.handle('page:move', async (_e, rel: string, targetSectionRel: string) => {
+  ipcMain.handle('page:move', async (_e, relIn: string, targetSectionRel: string) => {
     const root = requireRoot()
+    const rel = await livePage(relIn)
     const newRel = await movePage(root, rel, targetSectionRel)
+    notePageMoved(rel, newRel)
     indexer?.remove(rel)
     await indexArrivedPage(newRel)
     const tree = await afterSectionChange(parentOf(rel), targetSectionRel)
@@ -555,7 +601,7 @@ export function registerIpc(): void {
   ipcMain.handle('page:copy', async (_e, rel: string, targetSectionRel: string, fromRoot?: string) => {
     const root = requireRoot()
     const source = fromRoot && !isSameRoot(fromRoot, root) ? await knownNotebookRoot(fromRoot) : root
-    const newRel = await copyPage(source, rel, targetSectionRel, source === root ? {} : { root })
+    const newRel = await copyPage(source, source === root ? await livePage(rel) : rel, targetSectionRel, source === root ? {} : { root })
     await indexArrivedPage(newRel)
     const tree = await afterSectionChange(targetSectionRel)
     return { rel: newRel, tree }
@@ -605,17 +651,18 @@ export function registerIpc(): void {
     await setNotebookPaper(root, paper)
     return openNotebook(root)
   })
-  ipcMain.handle('print:print', async (_e, rel: string, paper: PaperSettings) => printPage(rel, paper, focusedWindow()))
+  ipcMain.handle('print:print', async (_e, rel: string, paper: PaperSettings) => printPage(await livePage(rel), paper, focusedWindow()))
   ipcMain.handle('print:exportPages', async (_e, scopeRel: string, format: 'html' | 'pdf', suggestedName: string) => {
     const root = requireRoot()
     const target = scopeRel ? resolveInside(root, scopeRel) : root
     return exportPages(target, format, suggestedName, focusedWindow())
   })
   ipcMain.handle('print:pdf', async (_e, rel: string, paper: PaperSettings, title: string, outPath?: string) =>
-    exportPdf(rel, paper, title, outPath, focusedWindow())
+    exportPdf(await livePage(rel), paper, title, outPath, focusedWindow())
   )
-  ipcMain.handle('page:delete', async (_e, rel: string) => {
+  ipcMain.handle('page:delete', async (_e, relIn: string) => {
     const root = requireRoot()
+    const rel = await livePage(relIn)
     const name = await deletePage(root, rel)
     indexer?.remove(rel)
     return { name, tree: await afterSectionChange(parentOf(rel)) }

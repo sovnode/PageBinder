@@ -211,8 +211,9 @@ export interface PageBinderApi {
     snapshotHtml(rel: string, name: string): Promise<string>
     restoreSnapshot(rel: string, name: string): Promise<SavePageResult & { tree: NotebookTree }>
     copySnapshot(rel: string, name: string): Promise<{ relPath: string; tree: NotebookTree }>
-    /** `firstName`: the name given right after creating the page, which its title block takes too. */
-    rename(rel: string, title: string, opts?: { firstName?: boolean }): Promise<SavePageResult & { tree: NotebookTree }>
+    /** `firstName`: the name given right after creating the page, which its title block takes too. `from`: the folder
+     *  renamed, which may differ from `rel` when a save had just moved it. */
+    rename(rel: string, title: string, opts?: { firstName?: boolean }): Promise<SavePageResult & { tree: NotebookTree; from: string }>
     addImage(rel: string, originalName: string, bytes: ArrayBuffer): Promise<FileEntry>
     pickImages(rel: string): Promise<FileEntry[]>
     addImagePaths(rel: string, paths: string[]): Promise<FileEntry[]>
