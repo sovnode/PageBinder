@@ -17,6 +17,13 @@ Entry format:
 
 ---
 
+## 2026-10-25 · lead (macOS, Apple silicon) · main
+**Changed:** 1.2.1 work: a page made from a template is named after its first line of text and follows it until it is renamed by hand (new optional page field `titleSource`; see the 1.2.1 section of DEVELOPMENT_PLAN.md). Requests that name a page folder a save has just moved are followed to it (`livePage` in `ipc.ts`), and a page keeps its place in the list when a save moves its folder. The v1.2.1 draft was rebuilt from this work at the user's request.
+**Found:** The user found two bugs while testing. Clicking a page's name after editing its first line failed, because the click saved the page (moving its folder) and then opened the old folder. The page also jumped to the top of the list, because the index re-added it with no place. Both are fixed, with end-to-end checks shown to fail without the fixes. `npm run dev` reopens its window on every main-process edit; the user wants it on the second display (`PAGEBINDER_TEST_DISPLAY=2 npm run dev`).
+**Checked:** Type check, 104 unit tests, and every end-to-end suite (149 s). The user tried the feature and both fixes in the running app.
+**Next platform must check:** Windows, from the rebuilt v1.2.1 draft: make a page from a template; it is named after its first line, with no naming step. Edit that line (the name changes in the list), click the page's name (no error, and it keeps its place), then rename it by hand (the name then stays, whatever the line says). Also the spelling and recent-notebook checks in the 2026-10-20 note.
+**Open:** v1.2.1 is a draft only.
+
 ## 2026-10-20 · lead (macOS, Apple silicon) · main
 **Changed:** 1.2.1 work: spelling suggestions on right-click (up to five, in bold, then Add to dictionary) and *Open in Finder/Explorer* plus *Remove from this list* on a recent notebook's right-click menu on the start screen. Built as the v1.2.1 draft at the user's request, for testing on Windows.
 **Found:** Electron's `context-menu` event reported no misspelled word on macOS when tried, but `webFrame.isWordMisspelled` and `getWordSuggestions` use the system checker and work; the app uses those. macOS does not flag every typo (it accepts "Teh").
@@ -153,11 +160,3 @@ Entry format:
 **Checked:** Type check clean; unit tests; every window suite. Phase 8's page-break step now covers a paragraph split at two boundaries (each sheet filled to its last line, continuation at the top of the next printable area), a list whose crossing item moves whole, the stored paragraph staying whole, and editor-versus-print agreement on every margin and split, at standard, double, and 1.15 spacing.
 **Next platform must check:** Windows: a long paragraph across a page break splits at the same line on screen and in Print Preview.
 **Open:** Tables taller than a sheet still run through the margins (no row splitting). Word wrap choice still open.
-
-## 2026-09-27 · lead (macOS, Apple silicon) · main
-**Changed:** Line spacing. A paragraph attribute (`lineHeight`: 1, 1.15, 2, 2.5, or 3; none means the standard 1.5) set from a new ribbon control beside the font size or from Line spacing in a text box's right-click menu, for every paragraph the selection touches (`app/src/shared/render/lineHeight.ts`). The same menu has Default for new text boxes, kept per computer in window storage (`app/src/renderer/src/textDefaults.ts`) and written into each new text box and table, so pages look the same everywhere. TextStyleKit's own character-level line height is switched off to avoid a second, conflicting kind.
-**Found:** TextStyleKit ships a character-level `lineHeight` command; the paragraph command is named `setParagraphSpacing` to keep them apart.
-**Checked:** Type check clean; 75 unit tests pass (new: page.html line spacing). Phase 8 gained a step: right-click spacing on highlighted text, ribbon spacing, the default for a new box and its next paragraph, and editor-versus-print page breaks at double and 1.15 spacing. All window suites rerun on this change.
-**Found (after push):** On GitHub's Windows machine, the ribbon's spacing dropdown applied only to the paragraph with the cursor: choosing from a dropdown moved focus and Chromium on Windows collapsed the highlight. The ribbon now restores the last selection made in the text before any dropdown command (font, size, spacing). Also, the phase 8 full-screen toggle is skipped when the test window is not the active one (someone using the Mac), checking only the single menu item then.
-**Next platform must check:** Windows: line spacing from the ribbon and the right-click menu; a long double-spaced text box across a page break looks the same on screen and in Print Preview.
-**Open:** Word wrap option still to be chosen.
