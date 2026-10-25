@@ -36,6 +36,7 @@ import { renderPageHtml, paperSizePx } from '../../shared/render/renderPage'
 import { findMissingFiles, ATTACHMENTS_DIR, IMAGES_DIR } from './attachments'
 import { pruneHistory, type HistoryPolicy, DEFAULT_HISTORY_POLICY } from './history'
 import { recyclePage } from './recycle'
+import { withTitleFromText } from '../../shared/pageTitle'
 
 /* ---------- construction ---------- */
 
@@ -379,7 +380,8 @@ export async function readSnapshot(root: string, pageRel: string, name: string):
 /**
  * Rename a page: loads it, changes the title, saves it (folder rename included). `firstName` is set
  * when the name is given right after the page was created: the title block, if it still shows the
- * placeholder name, takes the new name. Later renames leave the title block alone.
+ * placeholder name, takes the new name. Later renames leave the title block alone. A page whose name
+ * followed its first line of text (made from a template) keeps the name given here from now on.
  */
 export async function renamePage(root: string, pageRel: string, title: string, opts: { firstName?: boolean } = {}): Promise<SavePageResult> {
   const loaded = await loadPage(root, pageRel)
@@ -394,17 +396,24 @@ export async function renamePage(root: string, pageRel: string, title: string, o
       objects = objects.map((o, k) => (k === i ? { ...block, content } : o))
     }
   }
-  return savePage(root, loaded.relPath, { ...loaded.doc, title: next, objects })
+  const { titleSource: _followed, ...doc } = loaded.doc
+  return savePage(root, loaded.relPath, { ...doc, title: next, objects })
 }
 
 /* ---------- snapshots: restore and copy ---------- */
 
-/** Make a history snapshot the current version. The version being replaced is snapshotted first, as with any save. */
+/**
+ * Make a history snapshot the current version. The version being replaced is snapshotted first, as
+ * with any save. Whether the name follows the first line of text stays as it is now: an older
+ * version never undoes a rename.
+ */
 export async function restoreSnapshot(root: string, pageRel: string, name: string, policy?: HistoryPolicy): Promise<SavePageResult> {
   const snap = await readSnapshot(root, pageRel, name)
   if (!snap) throw new Error('That version could not be read.')
   const current = await loadPage(root, pageRel)
-  return savePage(root, current.relPath, { ...snap, manifest: current.doc.manifest }, policy)
+  const { titleSource: _then, ...rest } = snap
+  const restored: PageDoc = { ...rest, manifest: current.doc.manifest, ...(current.doc.titleSource ? { titleSource: current.doc.titleSource } : {}) }
+  return savePage(root, current.relPath, withTitleFromText(restored), policy)
 }
 
 /** Create a new page in the same section holding a snapshot's content. */

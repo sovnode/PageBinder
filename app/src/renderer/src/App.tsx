@@ -5,7 +5,8 @@ import { renderPdfPages } from './pdfPrintout'
 import { paperPixels } from './paper'
 import { ActiveEditorProvider, useActiveEditor } from './editorContext'
 import type { Editor } from '@tiptap/react'
-import { childrenOf, findSection, groupPath, firstSection, parentGroupRel } from './tree'
+import { childrenOf, findSection, groupPath, firstSection, parentGroupRel, retitlePage } from './tree'
+import { withTitleFromText } from '@shared/pageTitle'
 import { Welcome } from './components/Welcome'
 import { NotebookPropertiesDialog } from './components/NotebookPropertiesDialog'
 import { Toolbar } from './components/Toolbar'
@@ -202,9 +203,15 @@ export function App(): JSX.Element {
         }
         lastHistoryKey.current = key
       }
+      // A page named after its first line of text takes the line's new wording, in the page list at once.
+      const named = withTitleFromText(next)
+      if (cur && named.titleSource && named.title !== cur.doc.title) {
+        const rel = cur.relPath
+        setTree((t) => (t ? retitlePage(t, rel, named.title) : t))
+      }
       // The canvas changes objects only and may hold a file list a moment old (a picture inserted into
       // a text box adds its file while the text changes), so the page keeps its own current file list.
-      setPage((cur) => (cur ? { ...cur, doc: { ...next, manifest: cur.doc.manifest }, dirty: true, version: cur.version + 1 } : cur))
+      setPage((c) => (c ? { ...c, doc: { ...named, manifest: c.doc.manifest }, dirty: true, version: c.version + 1 } : c))
       setSaveStatus('unsaved')
       window.clearTimeout(draftTimer.current)
       draftTimer.current = window.setTimeout(() => {
@@ -227,7 +234,15 @@ export function App(): JSX.Element {
       return o.kind === 'text' && now && now.kind === 'text' ? { ...o, content: now.content } : o
     })
     lastHistoryKey.current = null
-    setPage((p) => (p ? { ...p, doc: { ...snapshot, objects, manifest: cur.doc.manifest, id: cur.doc.id, created: cur.doc.created }, dirty: true, version: p.version + 1 } : p))
+    // Undo and redo change objects, never the name: a page renamed by hand keeps its name, and one
+    // named after its first line of text takes the restored line.
+    const { titleSource: _then, ...rest } = snapshot
+    const doc = withTitleFromText({ ...rest, objects, manifest: cur.doc.manifest, id: cur.doc.id, created: cur.doc.created, title: cur.doc.title, ...(cur.doc.titleSource ? { titleSource: cur.doc.titleSource } : {}) })
+    if (doc.title !== cur.doc.title) {
+      const rel = cur.relPath
+      setTree((t) => (t ? retitlePage(t, rel, doc.title) : t))
+    }
+    setPage((p) => (p ? { ...p, doc, dirty: true, version: p.version + 1 } : p))
     setSaveStatus('unsaved')
     window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(() => void savePage(), 2000)
@@ -632,11 +647,14 @@ export function App(): JSX.Element {
     if (!sectionRel) return
     try {
       await savePage()
-      const { relPath, tree: t } = await window.pagebinder.page.create(sectionRel, templateModeRef.current ? 'New template' : undefined, templateModeRef.current ? {} : { titleBlock: true })
+      const { relPath, tree: t, followsText } = await window.pagebinder.page.create(sectionRel, templateModeRef.current ? 'New template' : undefined, templateModeRef.current ? {} : { titleBlock: true })
       setTree(t)
       await openPage(relPath)
-      freshPageRel.current = relPath
-      setRenamingRel(relPath)
+      // A page from the section's default template is named after its first line of text: no naming step.
+      if (!followsText) {
+        freshPageRel.current = relPath
+        setRenamingRel(relPath)
+      }
       recordCreate(relPath, 'new page')
     } catch (err) {
       fail(err)
@@ -1037,10 +1055,11 @@ export function App(): JSX.Element {
     if (!sectionRel) return
     try {
       await savePage()
-      const { relPath, tree: t } = await window.pagebinder.template.createPage(sectionRel, ref)
+      const { relPath, tree: t, followsText } = await window.pagebinder.template.createPage(sectionRel, ref)
       setTree(t)
       await openPage(relPath)
-      setRenamingRel(relPath)
+      // Named after its first line of text, the page needs no naming step; a template with no text does.
+      if (!followsText) setRenamingRel(relPath)
       recordCreate(relPath, 'new page from template')
     } catch (err) {
       fail(err)

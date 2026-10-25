@@ -217,6 +217,10 @@ export interface PageDoc {
   pageBorder?: boolean
   /** The alignment grid on screen (View > Toggle Grid). Missing means off. */
   pageGrid?: boolean
+  /** On a page made from a template: the text box whose first line is the page's name, kept in step
+   *  as the text changes (see `src/shared/pageTitle.ts`). Renaming the page removes it. Optional: other
+   *  pages, and pages from 1.2.0 and earlier, lack it. */
+  titleSource?: string
   paper: PaperSettings
   print?: PrintSettings
   objects: CanvasObject[]

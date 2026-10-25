@@ -57,6 +57,7 @@ export async function movePage(root: string, pageRel: string, targetSectionRel: 
 /**
  * Duplicate a page folder, attachments included, with a new ID and no history. `into` puts the copy
  * in another notebook (Save as template copies a page into the Templates notebook), retitled if asked.
+ * A copy's name stays as it is: only a page made from a template follows its first line of text.
  */
 export async function copyPage(root: string, pageRel: string, targetSectionRel: string, into: { root?: string; title?: string } = {}): Promise<string> {
   const destRoot = into.root ?? root
@@ -69,7 +70,8 @@ export async function copyPage(root: string, pageRel: string, targetSectionRel: 
   await fs.mkdir(join(dest, '.history'), { recursive: true })
   const doc = await readJson<PageDoc>(join(dest, PAGE_DOC))
   if (doc) {
-    const fresh = withChecksum({ ...doc, ...(into.title ? { title: into.title } : {}), id: newId(), created: now(), modified: now() })
+    const { titleSource: _followed, ...rest } = doc
+    const fresh = withChecksum({ ...rest, ...(into.title ? { title: into.title } : {}), id: newId(), created: now(), modified: now() })
     await writeJson(join(dest, PAGE_DOC), fresh)
     await writeRendered(dest, fresh)
   }

@@ -55,6 +55,16 @@ async function main(): Promise<void> {
   }
   const pagesIn = async (dir: string): Promise<string[]> => (await fs.readdir(dir)).filter((n) => n.endsWith('.page')).sort()
   const readDoc = async (dir: string): Promise<PageDoc> => JSON.parse(await fs.readFile(join(dir, 'page.json'), 'utf8')) as PageDoc
+  /** The page in a section folder with this name, if any. */
+  const pageTitled = async (dir: string, title: string): Promise<{ folder: string; doc: PageDoc } | null> => {
+    for (const folder of await pagesIn(dir)) {
+      const doc = await readDoc(join(dir, folder))
+      if (doc.title === title) return { folder, doc }
+    }
+    return null
+  }
+  // To the end of a text box's text.
+  const docEnd = process.platform === 'darwin' ? 'Meta+ArrowDown' : 'Control+End'
 
   const app = await electron.launch({ args: [resolve(process.env['E2E_OUT'] ?? 'out-e2e', 'main/index.js'), `--user-data-dir=${userData}`], cwd: resolve('.'), env: { ...process.env, PAGEBINDER_OPEN: root, PAGEBINDER_TEST_PICK_IMAGES: picturePath } })
   const page = await app.firstWindow()
@@ -195,18 +205,40 @@ async function main(): Promise<void> {
   assert(JSON.stringify(headings) === JSON.stringify(['General', 'Farm']), `templates are listed under their sections (${headings.join(', ')})`)
   assert(offered.filter((t) => t === 'From template: Visit form v2').length === 2 && !offered.some((t) => t.includes('Old form')), `both templates are offered and the old one is not (${offered.join(' | ')})`)
   await page.locator('.context-item', { hasText: /^From template: Visit form v2$/ }).nth(1).click()
-  await page.waitForSelector('.page-row.renaming input')
-  assert((await page.locator('.page-row.renaming input').inputValue()) === 'Visit form v2', 'the new page is named after the template')
+  // The page is named after its first line of text, placeholder filled, with no naming step.
+  const activeName = async (): Promise<string> => (await page.locator('.page-row.on .page-title-text').textContent()) ?? ''
+  await page.waitForFunction(() => (document.querySelector('.page-row.on .page-title-text')?.textContent ?? '').startsWith('Original template text plus an edit made '))
+  assert(!(await page.locator('.page-row.renaming').count()), 'no naming step for a page named after its first line')
+  const firstName = await activeName()
+  assert(!firstName.includes('{{'), `the name has its placeholder filled (${firstName})`)
+  // Editing that line renames the page: in the page list at once, and its folder when it is saved.
+  await page.locator('.text-container .tiptap', { hasText: 'Original template text' }).first().click()
+  await page.keyboard.press(docEnd)
+  await page.keyboard.type(' at Ridge Road')
+  await page.waitForFunction(() => (document.querySelector('.page-row.on .page-title-text')?.textContent ?? '').endsWith(' at Ridge Road'))
+  await saveViaMenu(page)
+  const synced = await pageTitled(join(root, sec), `${firstName} at Ridge Road`)
+  assert(synced?.doc.titleSource, `the page was saved under the new name and still follows its text (${await pagesIn(join(root, sec))})`)
+  // Renaming the page by hand ends the link for good: later edits to the line leave the name alone.
+  await page.locator('.page-row.on').click({ button: 'right' })
+  await page.locator('.context-item', { hasText: /^Rename/ }).click()
   await page.locator('.page-row.renaming input').fill('Site visit')
   await page.keyboard.press('Enter')
   await page.waitForSelector('.page-row.on:has-text("Site visit")')
-  await page.waitForTimeout(300)
+  await page.locator('.text-container .tiptap', { hasText: 'Original template text' }).first().click()
+  await page.keyboard.press(docEnd)
+  await page.keyboard.type(' and more')
+  await saveViaMenu(page)
   const madeDir = join(root, sec, 'Site visit.page')
+  const renamedDoc = await readDoc(madeDir)
+  assert(renamedDoc.title === 'Site visit' && !renamedDoc.titleSource && JSON.stringify(renamedDoc.objects).includes('Ridge Road and more'), `after a rename the name stays, whatever the line says (${renamedDoc.title})`)
+  assert((await activeName()) === 'Site visit', 'the page list keeps the chosen name')
   const madeText = JSON.stringify((await readDoc(madeDir)).objects)
   assert(madeText.includes('plus an edit made ') && !madeText.includes('{{date}}'), `the page carries the template's edit, its placeholder filled (${madeText.slice(0, 160)})`)
   assert((await loaded('.canvas .image-object img')) && (await loaded('.canvas .anchored-picture-frame img')), "the page shows the template's pictures")
   assert((await fs.readdir(join(madeDir, 'images'))).length === 3, 'the pictures were copied into the new page')
   step('notebooks offer the templates by section, and pages made from them carry their content and pictures')
+  step('a page made from a template is named after its first line and follows it, until it is renamed by hand')
 
   // 8. A section's default template is named by the template's id; same-named templates show their section.
   await page.locator('.tab', { hasText: 'Work' }).click({ button: 'right' })
@@ -219,7 +251,11 @@ async function main(): Promise<void> {
   }
   assert(defRef === `template:${templateId}`, `the section default names the template by its id (${defRef})`)
   await page.locator('.page-row.add').click()
-  await page.waitForSelector('.page-row.renaming input')
+  // From the default template too, the page is named after its first line, with no naming step.
+  await page.waitForFunction((n) => (document.querySelector('.page-row.on .page-title-text')?.textContent ?? '') === n, firstName)
+  assert(!(await page.locator('.page-row.renaming').count()), 'no naming step for a page from the default template')
+  await page.locator('.page-row.on').click({ button: 'right' })
+  await page.locator('.context-item', { hasText: /^Rename/ }).click()
   await page.locator('.page-row.renaming input').fill('North visit')
   await page.keyboard.press('Enter')
   await page.waitForSelector('.page-row.on:has-text("North visit")')

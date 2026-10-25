@@ -21,6 +21,7 @@ import { copyPage } from './copymove'
 import { NOTEBOOK_META, PAGE_DOC, SECTION_META, resolveInside } from './paths'
 export { TEMPLATES_NOTEBOOK } from './paths'
 import type { HistoryPolicy } from './history'
+import { titleSourceOf } from '../../shared/pageTitle'
 
 /** The section a new Templates notebook starts with. */
 export const FIRST_TEMPLATES_SECTION = 'General'
@@ -150,7 +151,9 @@ export function fillObjects(objects: CanvasObject[], ctx: PlaceholderContext): C
 
 /**
  * Create a page in `sectionRel` from a template page's folder. Its pictures and attached files are
- * copied so the page owns them, and its placeholders are filled in.
+ * copied so the page owns them, and its placeholders are filled in. With `nameFromText`, the page is
+ * named after its first line of text (once placeholders are filled) and keeps following that line
+ * until it is renamed; `title` is then the name used only when the template has no text.
  */
 export async function createPageFromTemplate(
   root: string,
@@ -159,10 +162,14 @@ export async function createPageFromTemplate(
   title: string,
   ctx: Omit<PlaceholderContext, 'date' | 'title'>,
   policy?: HistoryPolicy,
-  paper?: PaperSettings
+  paper?: PaperSettings,
+  opts: { nameFromText?: boolean } = {}
 ): Promise<{ relPath: string; doc: PageDoc }> {
   const tdoc = await readValidPage(join(templateDir, PAGE_DOC))
   if (!tdoc) throw new Error('The template could not be read.')
+  const objects = fillObjects(tdoc.objects, { ...ctx, date: new Date(), title })
+  const source = opts.nameFromText ? titleSourceOf(objects) : null
+  if (source) title = source.line
   const created = await createPage(root, sectionRel, title, paper ?? tdoc.paper)
   const dest = resolveInside(root, created.relPath)
   for (const sub of ['images', 'attachments']) {
@@ -173,11 +180,10 @@ export async function createPageFromTemplate(
       await fs.mkdir(join(dest, sub), { recursive: true })
     }
   }
-  const full: PlaceholderContext = { ...ctx, date: new Date(), title }
   const saved = await savePage(
     root,
     created.relPath,
-    { ...created.doc, title, paper: paper ?? tdoc.paper, ...(tdoc.print ? { print: tdoc.print } : {}), ...(tdoc.pageBorder !== undefined ? { pageBorder: tdoc.pageBorder } : {}), ...(tdoc.pageGrid !== undefined ? { pageGrid: tdoc.pageGrid } : {}), objects: fillObjects(tdoc.objects, full), manifest: { images: tdoc.manifest.images, attachments: tdoc.manifest.attachments } },
+    { ...created.doc, title, ...(source ? { titleSource: source.id } : {}), paper: paper ?? tdoc.paper, ...(tdoc.print ? { print: tdoc.print } : {}), ...(tdoc.pageBorder !== undefined ? { pageBorder: tdoc.pageBorder } : {}), ...(tdoc.pageGrid !== undefined ? { pageGrid: tdoc.pageGrid } : {}), objects, manifest: { images: tdoc.manifest.images, attachments: tdoc.manifest.attachments } },
     policy
   )
   return { relPath: saved.relPath, doc: saved.doc }

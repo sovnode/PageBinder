@@ -77,8 +77,11 @@ async function main(): Promise<void> {
   assert(!(await fs.stat(join(root, 'templates')).then(() => true, () => false)), 'nothing written to a template folder in the notebook')
   await page.locator('.page-list-head .icon').click()
   await page.locator('.context-item', { hasText: 'From template: Survey page' }).click()
-  await page.waitForSelector('.page-row.renaming input')
-  assert((await page.locator('.page-row.renaming input').inputValue()) === 'Survey page', 'a page made from a template is named after the template')
+  // Named after its first line of text, placeholders filled, the page needs no naming step.
+  await page.waitForFunction(() => (document.querySelector('.page-row.on .page-title-text')?.textContent ?? '').startsWith('Survey of Surveys in Phase 6 notebook, made on '))
+  assert(!(await page.locator('.page-row.renaming').count()), 'no naming step for a page named after its first line')
+  await page.locator('.page-row.on').click({ button: 'right' })
+  await page.locator('.context-item', { hasText: /^Rename/ }).click()
   await page.locator('.page-row.renaming input').fill('Ridge Road')
   await page.keyboard.press('Enter')
   await page.waitForSelector('.page-row.on:has-text("Ridge Road")')
@@ -98,7 +101,10 @@ async function main(): Promise<void> {
     await page.waitForTimeout(100)
   }
   await page.locator('.page-row.add').click()
-  await page.waitForSelector('.page-row.renaming input')
+  // A page from the default template is named after its first line too; rename it by hand.
+  await page.waitForFunction(() => (document.querySelector('.page-row.on .page-title-text')?.textContent ?? '').startsWith('Survey of Surveys in Phase 6 notebook, made on ') && !document.querySelector('.page-row.renaming'))
+  await page.locator('.page-row.on').click({ button: 'right' })
+  await page.locator('.context-item', { hasText: /^Rename/ }).click()
   await page.locator('.page-row.renaming input').fill('North Field')
   await page.keyboard.press('Enter')
   await page.waitForSelector('.page-row.on:has-text("North Field")')
@@ -224,7 +230,10 @@ async function main(): Promise<void> {
   // 7. Notebook-level undo: page creation, deletion, and moves.
   const pagesBefore = await page.locator('.page-row:not(.add)').count()
   await page.locator('.page-row.add').click()
-  await page.waitForSelector('.page-row.renaming input')
+  // Surveys has a default template, so the new page is named after its first line; rename it by hand.
+  await page.waitForFunction((n) => document.querySelectorAll('.page-row:not(.add)').length === n + 1 && !!document.querySelector('.page-row.on'), pagesBefore)
+  await page.locator('.page-row.on').click({ button: 'right' })
+  await page.locator('.context-item', { hasText: /^Rename/ }).click()
   await page.locator('.page-row.renaming input').fill('Temporary')
   await page.keyboard.press('Enter')
   await page.waitForSelector('.page-row.on:has-text("Temporary")')

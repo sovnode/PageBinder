@@ -156,7 +156,8 @@ export interface PageBinderApi {
     sections(): Promise<{ rel: string; name: string }[]>
     /** Copy a page into a section of the Templates notebook; returns the templates afterwards. */
     save(pageRel: string, sectionRel: string, name: string): Promise<TemplateInfo[]>
-    createPage(sectionRel: string, ref: string, title?: string): Promise<{ relPath: string; tree: NotebookTree }>
+    /** `followsText`: the page is named after its first line of text, and follows it until renamed. */
+    createPage(sectionRel: string, ref: string, title?: string): Promise<{ relPath: string; tree: NotebookTree; followsText: boolean }>
     setSectionDefault(rel: string, ref: string | null): Promise<NotebookTree>
   }
   move: {
@@ -199,7 +200,8 @@ export interface PageBinderApi {
   }
   page: {
     /** `titleBlock`: start a blank page with the page name and creation date at the top. */
-    create(sectionRel: string, title?: string, opts?: { titleBlock?: boolean }): Promise<{ relPath: string; tree: NotebookTree }>
+    /** `followsText`: the page was made from the section's default template and is named after its first line of text. */
+    create(sectionRel: string, title?: string, opts?: { titleBlock?: boolean }): Promise<{ relPath: string; tree: NotebookTree; followsText: boolean }>
     load(rel: string): Promise<LoadPageResult>
     save(rel: string, doc: PageDoc): Promise<SavePageResult>
     saveDraft(rel: string, doc: PageDoc): Promise<void>

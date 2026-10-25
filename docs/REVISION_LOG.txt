@@ -10,6 +10,10 @@ versions before it. Nothing ever needs converting.
 Version 1.2.1 - in development (not yet released)
 -------------------------------------------------
 
+- A page made from a template is named after its first line of text, so it
+  needs no naming step, and its name changes as that line is edited. Rename
+  the page yourself (right-click > Rename) to give it a fixed name: from then
+  on its name stays as you set it.
 - Right-click a word underlined in red to see suggested spellings at the top
   of the menu. Choose one to replace the word, or choose Add to dictionary.
 - Right-click a notebook in the start screen's Recent list to open its folder

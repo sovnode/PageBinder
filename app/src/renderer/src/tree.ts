@@ -63,3 +63,12 @@ export function formatDateTime(iso: string): string {
   if (Number.isNaN(d.getTime())) return ''
   return d.toLocaleString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
+
+/** The tree with one page's name changed: a page named after its text shows the new name at once. */
+export function retitlePage(tree: NotebookTree, rel: string, title: string): NotebookTree {
+  const fix = (children: TreeChild[]): TreeChild[] =>
+    children.map((c) =>
+      c.kind === 'group' ? { ...c, children: fix(c.children) } : c.pages.some((p) => p.relPath === rel) ? { ...c, pages: c.pages.map((p) => (p.relPath === rel ? { ...p, title } : p)) } : c
+    )
+  return { ...tree, children: fix(tree.children) }
+}

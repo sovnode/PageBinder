@@ -344,9 +344,10 @@ export function registerIpc(): void {
     const template = templateId ? await findTemplate(templatesNotebookDir(), templateId).catch(() => undefined) : undefined
     if (template) {
       try {
-        const made = await createPageFromTemplate(root, sectionRel, resolveInside(templatesNotebookDir(), template.rel), title ?? template.name, { section: (await sectionOf(root, `${sectionRel}/x`)).name, notebook: meta?.name ?? '' }, historyPolicy())
+        // Unless a name was given, the page is named after its first line of text, and follows it.
+        const made = await createPageFromTemplate(root, sectionRel, resolveInside(templatesNotebookDir(), template.rel), title ?? template.name, { section: (await sectionOf(root, `${sectionRel}/x`)).name, notebook: meta?.name ?? '' }, historyPolicy(), undefined, { nameFromText: title === undefined })
         await reindexPage(made.relPath, made.doc)
-        return { relPath: made.relPath, tree: await afterSectionChange(sectionRel) }
+        return { relPath: made.relPath, tree: await afterSectionChange(sectionRel), followsText: !!made.doc.titleSource }
       } catch {
         /* the template could not be read: fall back to a blank page */
       }
@@ -354,7 +355,7 @@ export function registerIpc(): void {
     // A new blank page starts with a title block dated in the computer's regional format.
     const dateText = opts?.titleBlock ? new Intl.DateTimeFormat(app.getSystemLocale() || undefined, { dateStyle: 'full', timeStyle: 'short' }).format(new Date()) : undefined
     const { relPath } = await createPage(root, sectionRel, title, meta?.settings.paper, dateText ? { dateText } : {})
-    return { relPath, tree: await afterSectionChange(sectionRel) }
+    return { relPath, tree: await afterSectionChange(sectionRel), followsText: false }
   })
   ipcMain.handle('notebook:openTemplates', async () => {
     const dir = templatesNotebookDir()
@@ -373,8 +374,11 @@ export function registerIpc(): void {
     return { ...result, relPath: rel }
   })
   ipcMain.handle('page:save', async (_e, rel: string, doc: PageDoc) => {
-    const result = await savePage(requireRoot(), rel, doc, historyPolicy())
+    const root = requireRoot()
+    const result = await savePage(root, rel, doc, historyPolicy())
     await reindexPage(result.relPath, result.doc, rel)
+    // A new name (a page named after its first line of text) moved the folder: reopen it there next time.
+    if (result.relPath !== rel) rememberLastPage(root, result.relPath)
     return result
   })
   ipcMain.handle('page:saveDraft', async (_e, rel: string, doc: PageDoc) => saveDraft(requireRoot(), rel, doc))
@@ -528,9 +532,9 @@ export function registerIpc(): void {
     const template = id ? await findTemplate(templatesNotebookDir(), id) : undefined
     if (!template) throw new Error('That template is no longer in the Templates notebook.')
     const meta = await readJson<NotebookTree['meta']>(joinPath(root, 'notebook.json'))
-    const made = await createPageFromTemplate(root, sectionRel, resolveInside(templatesNotebookDir(), template.rel), title ?? template.name, { section: (await sectionOf(root, `${sectionRel}/x`)).name, notebook: meta?.name ?? '' }, historyPolicy())
+    const made = await createPageFromTemplate(root, sectionRel, resolveInside(templatesNotebookDir(), template.rel), title ?? template.name, { section: (await sectionOf(root, `${sectionRel}/x`)).name, notebook: meta?.name ?? '' }, historyPolicy(), undefined, { nameFromText: title === undefined })
     await reindexPage(made.relPath, made.doc)
-    return { relPath: made.relPath, tree: await afterSectionChange(sectionRel) }
+    return { relPath: made.relPath, tree: await afterSectionChange(sectionRel), followsText: !!made.doc.titleSource }
   })
   ipcMain.handle('section:setDefaultTemplate', async (_e, rel: string, ref: string | null) => {
     const root = requireRoot()
