@@ -18,6 +18,13 @@ Entry format:
 ---
 
 ## 2026-10-25 · lead (macOS, Apple silicon) · main
+**Changed:** v1.2.1 was published as a pre-release at the user's request, from `cbed23c` (its revision-log section dated, and the draft rebuilt from that commit first); 1.2.0 stays the Latest full release. Development moved on to 1.2.2. The compatibility rule was replaced: each release must be fully compatible with the previous one, new features included, and any upgrade a feature needs is built in, offered when an old notebook is opened, and written as a new notebook with the version in its name (see `CLAUDE.md`).
+**Found:** Nothing new.
+**Checked:** The release build of `cbed23c` passed on macOS and Windows; `releases/latest` still opens v1.2.0.
+**Next platform must check:** Windows: install `PageBinder-Setup-1.2.1.exe` from the v1.2.1 pre-release and run the checks in the earlier 1.2.1 notes below.
+**Open:** Nothing.
+
+## 2026-10-25 · lead (macOS, Apple silicon) · main
 **Changed:** 1.2.1 work: a page made from a template is named after its first line of text and follows it until it is renamed by hand (new optional page field `titleSource`; see the 1.2.1 section of DEVELOPMENT_PLAN.md). Requests that name a page folder a save has just moved are followed to it (`livePage` in `ipc.ts`), and a page keeps its place in the list when a save moves its folder. The v1.2.1 draft was rebuilt from this work at the user's request.
 **Found:** The user found two bugs while testing. Clicking a page's name after editing its first line failed, because the click saved the page (moving its folder) and then opened the old folder. The page also jumped to the top of the list, because the index re-added it with no place. Both are fixed, with end-to-end checks shown to fail without the fixes. `npm run dev` reopens its window on every main-process edit; the user wants it on the second display (`PAGEBINDER_TEST_DISPLAY=2 npm run dev`).
 **Checked:** Type check, 104 unit tests, and every end-to-end suite (149 s). The user tried the feature and both fixes in the running app.
@@ -153,10 +160,3 @@ Entry format:
 **Checked:** Type check; phase 8 suite; see the commit's workflow run for macOS and Windows.
 **Next platform must check:** Nothing new.
 **Open:** Unchanged.
-
-## 2026-09-27 · lead (macOS, Apple silicon) · main
-**Changed:** Page breaks now move text line by line (`app/src/shared/render/paginate.ts` for print, `app/src/renderer/src/sheetBreaks.ts` for the editor, kept in step). A long paragraph fills the sheet and continues at the top of the next printable area; a block whose first line would cross moves whole with its bullet, checkbox, or quote; tables, rules, and empty paragraphs move whole. The editor now wraps text exactly as page.html does (ProseMirror's `break-spaces` and disabled ligatures are overridden) and no longer adds a gap above tables. The in-app server renders page.html fresh for Print, Print Preview, and PDF export.
-**Found:** (1) The editor had always wrapped long paragraphs slightly differently from the printout because of ProseMirror's stylesheet; fixed on the editor side so printed wrapping is unchanged. (2) Adding space can make the browser adjust the scroll position, so both implementations measure the canvas again before every decision; without that, a scrolled editor pushed a paragraph far down the page. (3) Printing loaded the stored page.html, so a page saved by an older version would print with its old layout. (4) The phase 8 table-paste step could click Bold before the selection registered; it now waits.
-**Checked:** Type check clean; unit tests; every window suite. Phase 8's page-break step now covers a paragraph split at two boundaries (each sheet filled to its last line, continuation at the top of the next printable area), a list whose crossing item moves whole, the stored paragraph staying whole, and editor-versus-print agreement on every margin and split, at standard, double, and 1.15 spacing.
-**Next platform must check:** Windows: a long paragraph across a page break splits at the same line on screen and in Print Preview.
-**Open:** Tables taller than a sheet still run through the margins (no row splitting). Word wrap choice still open.
