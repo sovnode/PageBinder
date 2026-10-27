@@ -7,11 +7,12 @@ Each version opens, shows, edits, prints, and searches notebooks made by the
 versions before it. Nothing ever needs converting.
 
 
-Version 1.2.2 - in development (not yet released)
--------------------------------------------------
+Version 1.2.2 - 27 October 2026 (pre-release)
+---------------------------------------------
 
-- Windows: right-clicking a word underlined in red now shows suggested
-  spellings and Add to dictionary, as it already did on macOS.
+- Windows: right-clicking a word underlined in red offers suggested
+  spellings and Add to dictionary, as on macOS. This pre-release is for
+  testing that on Windows.
 
 
 Version 1.2.1 - 25 October 2026 (pre-release)
