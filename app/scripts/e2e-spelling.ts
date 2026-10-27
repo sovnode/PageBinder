@@ -18,8 +18,8 @@ function assert(cond: unknown, msg: string): asserts cond {
   if (!cond) throw new Error(`ASSERT: ${msg}`)
 }
 
-/** The middle of a word in the open page's text, in window coordinates. */
-async function wordCentre(page: Page, word: string): Promise<{ x: number; y: number }> {
+/** Where a word in the open page's text is, in window coordinates. */
+async function wordRect(page: Page, word: string): Promise<{ left: number; top: number; width: number; height: number }> {
   const at = await page.evaluate((w) => {
     for (const root of Array.from(document.querySelectorAll('.text-container .tiptap'))) {
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
@@ -30,13 +30,65 @@ async function wordCentre(page: Page, word: string): Promise<{ x: number; y: num
       range.setStart(n, i)
       range.setEnd(n, i + w.length)
       const r = range.getBoundingClientRect()
-      return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+      return { left: r.left, top: r.top, width: r.width, height: r.height }
     }
     }
     return null
   }, word)
   assert(at, `the word "${word}" is on the page`)
   return at
+}
+
+/** The middle of a word in the open page's text, in window coordinates. */
+async function wordCentre(page: Page, word: string): Promise<{ x: number; y: number }> {
+  const r = await wordRect(page, word)
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+}
+
+/**
+ * Windows: how many red pixels lie under a word, that is whether Windows' spelling checker has
+ * underlined it (the page cannot ask that checker about a word; see spelling.ts).
+ */
+async function underlinePixels(app: ElectronApplication, page: Page, word: string): Promise<number> {
+  const r = await wordRect(page, word)
+  const area = { x: Math.floor(r.left), y: Math.floor(r.top), width: Math.ceil(r.width) + 1, height: Math.ceil(r.height) + 4 }
+  const red = await app.evaluate(async ({ BrowserWindow }, rect) => {
+    const pixels = (await BrowserWindow.getAllWindows()[0]!.webContents.capturePage(rect)).toBitmap()
+    if (!pixels.length) return -1
+    let count = 0
+    // Four bytes a pixel: blue, green, red, alpha.
+    for (let i = 0; i + 3 < pixels.length; i += 4) if (pixels[i + 2]! > 160 && pixels[i + 1]! < 110 && pixels[i]! < 110) count++
+    return count
+  }, area)
+  assert(red >= 0, `the page could be photographed under "${word}"`)
+  return red
+}
+
+/** Windows: what the browser reported about the last right-click (see wordMenu). */
+async function lastRightClick(app: ElectronApplication): Promise<{ editable: boolean; word: string; suggestions: string[] } | null> {
+  return app.evaluate(() => ((globalThis as Record<string, unknown>)['__lastRightClick'] as { editable: boolean; word: string; suggestions: string[] } | undefined) ?? null)
+}
+
+/** What a right-click on a word came to, for a failure message. Call it with the menu closed. */
+async function rightClickSeen(app: ElectronApplication, page: Page, word: string): Promise<string> {
+  const target = await page.evaluate(() => (window as unknown as Record<string, string | undefined>)['__contextTarget'] ?? 'nowhere')
+  return `the right-click went to ${target}; the browser reported ${JSON.stringify(await lastRightClick(app))}; red pixels under "${word}": ${await underlinePixels(app, page, word)}`
+}
+
+/**
+ * Windows: whether its spelling checker marks a word, by the red underline it draws (given up to ten
+ * seconds to appear) or, failing that, by the browser's report of a right-click on the word.
+ */
+async function windowsMarks(app: ElectronApplication, page: Page, word: string): Promise<boolean> {
+  const deadline = Date.now() + 10000
+  while (Date.now() < deadline) {
+    if ((await underlinePixels(app, page, word)) > 0) return true
+    await page.waitForTimeout(250)
+  }
+  await wordMenu(app, page, word)
+  await page.keyboard.press('Escape')
+  await page.waitForSelector('.context-menu', { state: 'detached' })
+  return (await lastRightClick(app))?.word === word
 }
 
 async function menuItems(page: Page): Promise<string[]> {
@@ -78,8 +130,12 @@ async function misspelledMenu(app: ElectronApplication, page: Page, word: string
   for (;;) {
     const items = await wordMenu(app, page, word)
     if (items.includes('Add to dictionary')) return items
-    assert(Date.now() < deadline, `"${word}" is offered spelling suggestions (${items.join(' | ')})`)
     await page.keyboard.press('Escape')
+    if (Date.now() >= deadline) {
+      await page.waitForSelector('.context-menu', { state: 'detached' })
+      const seen = process.platform === 'win32' ? `; ${await rightClickSeen(app, page, word)}` : ''
+      assert(false, `"${word}" is offered spelling suggestions (${items.join(' | ')})${seen}`)
+    }
     await page.waitForTimeout(250)
   }
 }
@@ -101,11 +157,25 @@ async function main(): Promise<void> {
     const page = await app.firstWindow()
     useApp(app)
     await page.waitForSelector('.section-tabs')
-    // Count the right-clicks on text that the browser reports to the main process (Windows; see wordMenu).
+    // Count the right-clicks on text that the browser reports to the main process, and keep the last
+    // report (Windows; see wordMenu).
     await app.evaluate(({ BrowserWindow }) => {
       const g = globalThis as Record<string, unknown>
       g['__rightClicks'] = 0
-      for (const w of BrowserWindow.getAllWindows()) w.webContents.on('context-menu', () => (g['__rightClicks'] = ((g['__rightClicks'] as number | undefined) ?? 0) + 1))
+      for (const w of BrowserWindow.getAllWindows()) {
+        w.webContents.on('context-menu', (_e, p) => {
+          g['__rightClicks'] = ((g['__rightClicks'] as number | undefined) ?? 0) + 1
+          g['__lastRightClick'] = { editable: p.isEditable, word: p.misspelledWord, suggestions: p.dictionarySuggestions }
+        })
+      }
+    })
+    // Where each right-click went, for failure messages: a listener on the window runs after the page's own.
+    await page.evaluate(() => {
+      window.addEventListener('contextmenu', (e) => {
+        const t = e.target as Element
+        const place = t.closest('.context-menu') ? 'the open menu' : t.closest('.tiptap') ? 'the text' : 'outside the text'
+        ;(window as unknown as Record<string, string>)['__contextTarget'] = `${place} (<${t.nodeName.toLowerCase()}>${e.defaultPrevented ? ', default prevented' : ''})`
+      })
     })
 
     // 1. A misspelled word's right-click menu starts with suggestions; choosing one replaces the word.
@@ -115,10 +185,13 @@ async function main(): Promise<void> {
     // Each word is followed by more text, so the checker treats it as finished and underlines it.
     await page.keyboard.type(` The drainage ditch will recieve water. The culvert is clear. ${madeUp}.`)
     await page.keyboard.press('Escape')
-    // The page asks macOS's spelling checker about a word; Windows' checker reports the underlined word
-    // with each right-click instead (see spelling.ts). Linux (cloud sessions) usually has no dictionary.
-    if (process.platform !== 'win32' && !(await page.evaluate(() => window.pagebinder.spell.isMisspelled('recieve')))) {
-      process.stdout.write('  - skipped: no spelling dictionary on this computer\n')
+    // The page asks macOS's spelling checker about a word. Windows' checker cannot be asked (see
+    // spelling.ts): there the word must show its red underline, or a right-click on it must report it.
+    // Linux (cloud sessions) usually has no dictionary.
+    const marked = process.platform === 'win32' ? await windowsMarks(app, page, 'recieve') : await page.evaluate(() => window.pagebinder.spell.isMisspelled('recieve'))
+    if (!marked) {
+      const seen = process.platform === 'win32' ? ` (${await rightClickSeen(app, page, 'recieve')})` : ''
+      process.stdout.write(`  - skipped: no spelling dictionary on this computer${seen}\n`)
     } else {
       let items = await misspelledMenu(app, page, 'recieve')
       const firstPlain = items.indexOf('Add to dictionary')
@@ -142,7 +215,10 @@ async function main(): Promise<void> {
       // 3. Add to dictionary: the word is no longer marked as misspelled.
       await misspelledMenu(app, page, madeUp)
       await page.locator('.context-menu .context-item', { hasText: /^Add to dictionary$/ }).click()
-      await page.waitForFunction((w) => !window.pagebinder.spell.isMisspelled(w), madeUp, { timeout: 5000 })
+      // Windows checks the text again a moment after the word is added; the right-click below then
+      // shows whether it is still marked.
+      if (process.platform === 'win32') await page.waitForTimeout(1500)
+      else await page.waitForFunction((w) => !window.pagebinder.spell.isMisspelled(w), madeUp, { timeout: 5000 })
       items = await wordMenu(app, page, madeUp)
       assert(!items.includes('Add to dictionary'), `after Add to dictionary the word is no longer marked (${items.join(' | ')})`)
       await page.keyboard.press('Escape')
