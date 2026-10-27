@@ -110,6 +110,15 @@ function createWindow(): BrowserWindow {
     if (url.startsWith('http://') || url.startsWith('https://')) void shell.openExternal(url)
     return { action: 'deny' }
   })
+  // Windows underlines misspelled words with its own spelling checker, which the page cannot ask
+  // about a word. The page lets a right-click on text through, and the browser reports the word under
+  // it and Windows' suggestions here; they go to the page's own menu (see spelling.ts). Electron shows
+  // no menu of its own.
+  if (process.platform === 'win32') {
+    win.webContents.on('context-menu', (_e, params) => {
+      if (params.isEditable) win.webContents.send('spell:misspelling', { word: params.misspelledWord, suggestions: params.dictionarySuggestions })
+    })
+  }
   if (isDev) {
     void win.loadURL(process.env['ELECTRON_RENDERER_URL']!)
   } else {

@@ -10,6 +10,9 @@ versions before it. Nothing ever needs converting.
 Version 1.2.2 - in development (not yet released)
 -------------------------------------------------
 
+- Windows: right-clicking a word underlined in red now shows suggested
+  spellings and Add to dictionary, as it already did on macOS.
+
 
 Version 1.2.1 - 25 October 2026 (pre-release)
 ---------------------------------------------

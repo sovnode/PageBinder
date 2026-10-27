@@ -18,14 +18,36 @@ const WORD_CHAR = /[\p{L}\p{M}\p{N}'’]/u
 const MAX_SUGGESTIONS = 5
 
 /**
+ * Windows draws the red underline with its own spelling checker, which the page cannot ask about a
+ * word: `webFrame.isWordMisspelled` asks only Chromium's built-in dictionaries, which are off for
+ * every language Windows checks, so it always answers "spelled correctly". The browser does report
+ * the underlined word and Windows' suggestions when a right-click on the text reaches it (Electron's
+ * `context-menu` event, passed on as `spell.onMisspelling`), a moment after the menu has opened.
+ */
+export function spellingFromRightClick(): boolean {
+  return navigator.userAgent.includes('Windows')
+}
+
+/**
  * The misspelled word at a screen point in a text box, with suggestions, as judged by the
- * spelling checker that draws the red underline (macOS and Windows supply it). Null when the
- * point is not over a misspelled word.
+ * spelling checker that draws the red underline (macOS supplies it to the page; on Windows see
+ * `spellingFromRightClick`). Null when the point is not over a misspelled word.
  */
 export function misspellingAt(editor: Editor, x: number, y: number): Misspelling | null {
   const w = wordAt(editor, x, y)
   if (!w || !window.pagebinder.spell.isMisspelled(w.word)) return null
   return { ...w, suggestions: window.pagebinder.spell.suggestions(w.word).slice(0, MAX_SUGGESTIONS) }
+}
+
+/**
+ * Windows: the misspelled word at a screen point, from the browser's report of a right-click there
+ * (see `spellingFromRightClick`). Null unless the report names the word under the point.
+ */
+export function misspellingFromReport(editor: Editor, x: number, y: number, report: { word: string; suggestions: string[] }): Misspelling | null {
+  if (!report.word) return null
+  const w = wordAt(editor, x, y)
+  if (!w || w.word !== report.word) return null
+  return { ...w, suggestions: report.suggestions.slice(0, MAX_SUGGESTIONS) }
 }
 
 /** The word at a screen point in a text box, if the point is over one. */

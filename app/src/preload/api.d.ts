@@ -185,6 +185,8 @@ export interface PageBinderApi {
     isMisspelled(word: string): boolean
     suggestions(word: string): string[]
     addToDictionary(word: string): Promise<void>
+    /** Windows: the word under a right-click on text and Windows' suggestions for it; `word` is '' when it is not underlined. */
+    onMisspelling(handler: (report: { word: string; suggestions: string[] }) => void): () => void
   }
   file: {
     open(rel: string): Promise<void>

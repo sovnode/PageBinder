@@ -4,7 +4,7 @@
  * for a recent notebook, through the real Electron window.
  *   npx tsx scripts/e2e-spelling.ts
  */
-import { _electron as electron, type Page } from 'playwright'
+import { _electron as electron, type ElectronApplication, type Page } from 'playwright'
 import { useApp, saveViaMenu } from './e2e-save'
 import { promises as fs } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -44,6 +44,46 @@ async function menuItems(page: Page): Promise<string[]> {
   return page.locator('.context-menu .context-item').allTextContents()
 }
 
+/** Windows: how many right-clicks on text the browser has reported to the main process (see spelling.ts). */
+async function rightClicksReported(app: ElectronApplication): Promise<number> {
+  return app.evaluate(() => ((globalThis as Record<string, unknown>)['__rightClicks'] as number | undefined) ?? 0)
+}
+
+/**
+ * Right-click a word and return the menu's items. On Windows the browser reports the word under the
+ * pointer a moment after the menu opens, so this waits for that report to reach the window first.
+ */
+async function wordMenu(app: ElectronApplication, page: Page, word: string): Promise<string[]> {
+  const before = await rightClicksReported(app)
+  const at = await wordCentre(page, word)
+  await page.mouse.click(at.x, at.y, { button: 'right' })
+  await page.waitForSelector('.context-menu')
+  if (process.platform === 'win32') {
+    const deadline = Date.now() + 5000
+    while ((await rightClicksReported(app)) === before) {
+      assert(Date.now() < deadline, `the right-click on "${word}" was reported to the main process`)
+      await page.waitForTimeout(50)
+    }
+    await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))))
+  }
+  return menuItems(page)
+}
+
+/**
+ * Right-click a misspelled word until its menu offers spelling suggestions, and return the menu's
+ * items: the checker underlines a word a moment after it is typed.
+ */
+async function misspelledMenu(app: ElectronApplication, page: Page, word: string): Promise<string[]> {
+  const deadline = Date.now() + 20000
+  for (;;) {
+    const items = await wordMenu(app, page, word)
+    if (items.includes('Add to dictionary')) return items
+    assert(Date.now() < deadline, `"${word}" is offered spelling suggestions (${items.join(' | ')})`)
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(250)
+  }
+}
+
 async function main(): Promise<void> {
   const base = join(tmpdir(), `pagebinder-e2e-spell-${Date.now()}`)
   await fs.mkdir(base, { recursive: true })
@@ -61,20 +101,26 @@ async function main(): Promise<void> {
     const page = await app.firstWindow()
     useApp(app)
     await page.waitForSelector('.section-tabs')
+    // Count the right-clicks on text that the browser reports to the main process (Windows; see wordMenu).
+    await app.evaluate(({ BrowserWindow }) => {
+      const g = globalThis as Record<string, unknown>
+      g['__rightClicks'] = 0
+      for (const w of BrowserWindow.getAllWindows()) w.webContents.on('context-menu', () => (g['__rightClicks'] = ((g['__rightClicks'] as number | undefined) ?? 0) + 1))
+    })
 
     // 1. A misspelled word's right-click menu starts with suggestions; choosing one replaces the word.
     const box = page.locator('.text-container .tiptap').last()
     await box.click()
     await page.keyboard.press('End')
-    await page.keyboard.type(` The drainage ditch will recieve water. The culvert is clear. ${madeUp}`)
+    // Each word is followed by more text, so the checker treats it as finished and underlines it.
+    await page.keyboard.type(` The drainage ditch will recieve water. The culvert is clear. ${madeUp}.`)
     await page.keyboard.press('Escape')
-    // macOS and Windows supply the spelling checker; Linux (cloud sessions) usually has no dictionary.
-    if (!(await page.evaluate(() => window.pagebinder.spell.isMisspelled('recieve')))) {
+    // The page asks macOS's spelling checker about a word; Windows' checker reports the underlined word
+    // with each right-click instead (see spelling.ts). Linux (cloud sessions) usually has no dictionary.
+    if (process.platform !== 'win32' && !(await page.evaluate(() => window.pagebinder.spell.isMisspelled('recieve')))) {
       process.stdout.write('  - skipped: no spelling dictionary on this computer\n')
     } else {
-      let at = await wordCentre(page, 'recieve')
-      await page.mouse.click(at.x, at.y, { button: 'right' })
-      let items = await menuItems(page)
+      let items = await misspelledMenu(app, page, 'recieve')
       const firstPlain = items.indexOf('Add to dictionary')
       assert(firstPlain > 0 && items.slice(0, firstPlain).includes('receive'), `suggestions come first and include "receive" (${items.join(' | ')})`)
       assert(firstPlain <= 5, `at most five suggestions (${firstPlain})`)
@@ -88,23 +134,16 @@ async function main(): Promise<void> {
       step('a misspelled word offers suggestions first, and choosing one replaces it')
 
       // 2. A correctly spelled word shows the usual menu, with no suggestions.
-      at = await wordCentre(page, 'culvert')
-      await page.mouse.click(at.x, at.y, { button: 'right' })
-      items = await menuItems(page)
+      items = await wordMenu(app, page, 'culvert')
       assert(!items.includes('Add to dictionary') && items[0] === 'Insert picture…', `no spelling items for a correct word (${items.join(' | ')})`)
       await page.keyboard.press('Escape')
       step('a correctly spelled word gets the usual menu')
 
       // 3. Add to dictionary: the word is no longer marked as misspelled.
-      at = await wordCentre(page, madeUp)
-      await page.mouse.click(at.x, at.y, { button: 'right' })
-      items = await menuItems(page)
-      assert(items.includes('Add to dictionary'), `the made-up word is marked as misspelled (${items.join(' | ')})`)
+      await misspelledMenu(app, page, madeUp)
       await page.locator('.context-menu .context-item', { hasText: /^Add to dictionary$/ }).click()
       await page.waitForFunction((w) => !window.pagebinder.spell.isMisspelled(w), madeUp, { timeout: 5000 })
-      at = await wordCentre(page, madeUp)
-      await page.mouse.click(at.x, at.y, { button: 'right' })
-      items = await menuItems(page)
+      items = await wordMenu(app, page, madeUp)
       assert(!items.includes('Add to dictionary'), `after Add to dictionary the word is no longer marked (${items.join(' | ')})`)
       await page.keyboard.press('Escape')
       step('Add to dictionary stops the word being marked')

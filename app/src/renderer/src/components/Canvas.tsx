@@ -18,7 +18,7 @@ import { defaultLineHeight, newParagraphAttrs, setDefaultLineHeight } from '../t
 import { TEXT_IMAGE_WIDTHS } from '@shared/render/textImage'
 import { NodeSelection } from '@tiptap/pm/state'
 import type { AnchoredPicture } from '@shared/types'
-import { replaceMisspelling, addToDictionary, type Misspelling } from '../spelling'
+import { replaceMisspelling, addToDictionary, misspellingFromReport, type Misspelling } from '../spelling'
 
 function newId(): string {
   const bytes = new Uint8Array(12)
@@ -142,6 +142,18 @@ export function Canvas({
   const [heights, setHeights] = useState<Record<string, number>>({})
   const [guides, setGuides] = useState<{ x?: number; y?: number }>({})
   const [objectMenu, setObjectMenu] = useState<{ id: string; x: number; y: number; tableEditor?: Editor | null; textEditor?: Editor | null; extra?: { pictureId?: string; at?: { x: number; y: number }; spelling?: Misspelling } } | null>(null)
+  const objectMenuRef = useRef(objectMenu)
+  objectMenuRef.current = objectMenu
+  // Windows reports the red-underlined word under a right-click a moment after the text box's menu
+  // has opened (see spelling.ts); its suggestions then go at the top of that menu.
+  useEffect(() => {
+    return window.pagebinder.spell.onMisspelling((report) => {
+      const menu = objectMenuRef.current
+      if (!menu?.textEditor || menu.extra?.spelling || menu.extra?.pictureId) return
+      const spelling = misspellingFromReport(menu.textEditor, menu.x, menu.y, report)
+      if (spelling) setObjectMenu((m) => (m === menu ? { ...m, extra: { ...m.extra, spelling } } : m))
+    })
+  }, [])
 
   // A new text box takes focus once; the id is cleared so undo or redo cannot re-focus it.
   useEffect(() => {

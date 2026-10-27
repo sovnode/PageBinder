@@ -17,6 +17,13 @@ Entry format:
 
 ---
 
+## 2026-10-27 · platform (Windows x64) · fix/windows-spelling
+**Changed:** Spelling suggestions on right-click now reach the menu on Windows, where 1.2.1 never showed any (this commit). On Windows a text box lets a right-click on its text go on to the browser (`spellingFromRightClick` in `spelling.ts`); the main process passes the word and suggestions from Electron's `context-menu` event to the window (`spell:misspelling`, preload `spell.onMisspelling`), and `Canvas` adds them to the top of the menu already open for that text box when the reported word is the one under the pointer (`misspellingFromReport`). macOS is unchanged. `scripts/e2e-spelling.ts` now runs its spelling steps on Windows. Also `PLATFORM_NOTES.md` (Windows, Spelling) and the 1.2.2 sections of `DEVELOPMENT_PLAN.md` and `REVISION_LOG.txt`.
+**Found:** The cause, from the Electron and Chromium sources: on Windows the red underline comes from Windows' own spelling checker in the browser process, while `webFrame.isWordMisspelled` and `getWordSuggestions` ask only the page's Hunspell dictionaries, which Chromium switches off for every language Windows checks (`SpellCheck::SpellCheckWord` then finds no enabled language and calls every word correct). Electron's own tests of these calls do not run on Windows. Electron patches Chromium (`fix_win32_synchronous_spellcheck.patch`) so that Windows' suggestions travel with each underline into the `context-menu` event's `misspelledWord` and `dictionarySuggestions`, but that event fires only when the page does not cancel `contextmenu`. CI did not catch this: `e2e-spelling.ts` took a false `isWordMisspelled('recieve')` to mean "no dictionary" and skipped. On Windows, Chromium selects an underlined word when it is right-clicked; the menu works the same either way.
+**Checked:** Nothing ran on this machine: it has no Node.js, so the type check, unit tests, and end-to-end suites did not run here, and the changes were checked by reading only. The CI run on this push is their first run, and its Windows end-to-end run now goes through the right-click path. The app was not tried by hand here.
+**Next platform must check:** Windows, once CI passes: install the Windows installer from this branch's CI run, type a misspelled word such as "recieve" in a text box, and right-click it once it is underlined: up to five suggestions in bold at the top, choosing one replaces the word, and Add to dictionary removes the underline. Also right-click a correctly spelled word (the usual menu) and an underlined word in a table cell. macOS: nothing should change; the macOS end-to-end run covers it.
+**Open:** Merge into `main` after CI passes and the user has tried it.
+
 ## 2026-10-25 · lead (macOS, Apple silicon) · main
 **Changed:** v1.2.1 was published as a pre-release at the user's request, from `cbed23c` (its revision-log section dated, and the draft rebuilt from that commit first); 1.2.0 stays the Latest full release. Development moved on to 1.2.2. The compatibility rule was replaced: each release must be fully compatible with the previous one, new features included, and any upgrade a feature needs is built in, offered when an old notebook is opened, and written as a new notebook with the version in its name (see `CLAUDE.md`).
 **Found:** Nothing new.
@@ -153,10 +160,3 @@ Entry format:
 **Checked:** The workflow parses; its release query, run against the repository, finds one published v1.1.0 release and none for v1.2.0. The first run of the changed workflow will be the proof.
 **Next platform must check:** Nothing.
 **Open:** The changes since `7606ede` (line-by-line page breaks, line spacing, the Order menu, editor/print alignment) need a new version number (for example 1.1.1 or 1.2.0) to reach a new draft. The duplicate v1.1.0 draft can be deleted if the user wants.
-
-## 2026-09-28 · lead (macOS, Apple silicon) · main
-**Changed:** Removed the ribbon's "restore the last selection" workaround (`Toolbar.tsx`); the dropdowns apply straight to the editor's selection again. Phase 8's line-spacing step clicks into the text box, waits until the editor has registered the click, and only then presses Select All.
-**Found:** The Windows failures of the ribbon line-spacing check were a test race, not a Windows or ribbon bug. Reproduced on this Mac by slowing the browser to CI speed and logging every editor transaction: an earlier Select All left the editor holding "everything selected"; the test clicked and pressed Select All within milliseconds, before the editor had read the click; Select All was then a no-op, and the late report of the click collapsed the selection. With the wait, 12 of 12 slowed runs pass. The earlier note blaming Windows dropdown focus was wrong and is corrected in `docs/dev/PLATFORM_NOTES.md`.
-**Checked:** Type check; phase 8 suite; see the commit's workflow run for macOS and Windows.
-**Next platform must check:** Nothing new.
-**Open:** Unchanged.

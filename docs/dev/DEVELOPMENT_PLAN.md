@@ -193,6 +193,8 @@ Published as a pre-release on 30 September 2026.
 
 ## Version 1.2.2 (in development)
 
+- **Spelling suggestions on Windows** (1.2.1 showed none there, found on 27 October 2026). The 1.2.1 entry below assumed `webFrame.isWordMisspelled` and `getWordSuggestions` use the Windows checker; they do not (see the Windows notes in `PLATFORM_NOTES.md`). On Windows the text box no longer cancels the right-click's `contextmenu` event on its text (`spellingFromRightClick` in `app/src/renderer/src/spelling.ts`), so Chromium puts the underlined word and Windows' suggestions in Electron's `context-menu` event; the main process sends them to the window (`spell:misspelling`, exposed as `spell.onMisspelling`), and `Canvas` adds them to the top of the menu already open for that text box when the reported word is the one under the pointer (`misspellingFromReport`). Electron shows no menu of its own. As in Chromium, right-clicking an underlined word on Windows selects it. macOS is unchanged. `scripts/e2e-spelling.ts` no longer skips its spelling steps on Windows (it took a false `isWordMisspelled` there to mean no dictionary): on Windows it waits for each right-click's report before reading the menu, and right-clicks a misspelled word again until its suggestions show.
+
 ## Version 1.2.1
 
 Published as a pre-release on 25 October 2026 from commit `cbed23c`; 1.2.0 stays the Latest full release.

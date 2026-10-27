@@ -105,7 +105,12 @@ const api = {
   spell: {
     isMisspelled: (word: string) => webFrame.isWordMisspelled(word),
     suggestions: (word: string) => webFrame.getWordSuggestions(word),
-    addToDictionary: (word: string) => invoke('spell:addWord', word)
+    addToDictionary: (word: string) => invoke('spell:addWord', word),
+    onMisspelling: (handler: (report: { word: string; suggestions: string[] }) => void) => {
+      const listener = (_e: unknown, report: { word: string; suggestions: string[] }): void => handler(report)
+      ipcRenderer.on('spell:misspelling', listener)
+      return () => ipcRenderer.removeListener('spell:misspelling', listener)
+    }
   },
   file: {
     open: (rel: string) => invoke('file:open', rel),
