@@ -65,8 +65,8 @@ async function underlinePixels(app: ElectronApplication, page: Page, word: strin
 }
 
 /** Windows: what the browser reported about the last right-click (see wordMenu). */
-async function lastRightClick(app: ElectronApplication): Promise<{ editable: boolean; word: string; suggestions: string[] } | null> {
-  return app.evaluate(() => ((globalThis as Record<string, unknown>)['__lastRightClick'] as { editable: boolean; word: string; suggestions: string[] } | undefined) ?? null)
+async function lastRightClick(app: ElectronApplication): Promise<{ editable: boolean; selected: string; word: string; suggestions: string[] } | null> {
+  return app.evaluate(() => ((globalThis as Record<string, unknown>)['__lastRightClick'] as { editable: boolean; selected: string; word: string; suggestions: string[] } | undefined) ?? null)
 }
 
 /** What a right-click on a word came to, for a failure message. Call it with the menu closed. */
@@ -165,17 +165,21 @@ async function main(): Promise<void> {
       for (const w of BrowserWindow.getAllWindows()) {
         w.webContents.on('context-menu', (_e, p) => {
           g['__rightClicks'] = ((g['__rightClicks'] as number | undefined) ?? 0) + 1
-          g['__lastRightClick'] = { editable: p.isEditable, word: p.misspelledWord, suggestions: p.dictionarySuggestions }
+          g['__lastRightClick'] = { editable: p.isEditable, selected: p.selectionText, word: p.misspelledWord, suggestions: p.dictionarySuggestions }
         })
       }
     })
-    // Where each right-click went, for failure messages: a listener on the window runs after the page's own.
+    // Where each right-click went, for failure messages (caught on its way down, before the page's own handlers).
     await page.evaluate(() => {
-      window.addEventListener('contextmenu', (e) => {
-        const t = e.target as Element
-        const place = t.closest('.context-menu') ? 'the open menu' : t.closest('.tiptap') ? 'the text' : 'outside the text'
-        ;(window as unknown as Record<string, string>)['__contextTarget'] = `${place} (<${t.nodeName.toLowerCase()}>${e.defaultPrevented ? ', default prevented' : ''})`
-      })
+      window.addEventListener(
+        'contextmenu',
+        (e) => {
+          const t = e.target as Element
+          const place = t.closest('.context-menu') ? 'the open menu' : t.closest('.tiptap') ? 'the text' : 'outside the text'
+          ;(window as unknown as Record<string, string>)['__contextTarget'] = `${place} (<${t.nodeName.toLowerCase()}>)`
+        },
+        true
+      )
     })
 
     // 1. A misspelled word's right-click menu starts with suggestions; choosing one replaces the word.

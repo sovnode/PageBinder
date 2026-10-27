@@ -10,7 +10,7 @@ import { SheetBreaks, layoutSheetBreaks, type SheetGeometry } from '../sheetBrea
 import { AnchoredPictures, drawAnchoredPictures, type Corner } from '../anchoredPicturesView'
 import { MIN_PICTURE_SIZE, textAreaWidth } from '@shared/render/anchoredPictures'
 import type { AnchoredPicture } from '@shared/types'
-import { misspellingAt, spellingFromRightClick, type Misspelling } from '../spelling'
+import { misspellingAt, spellingFromRightClick, selectWordForReport, type Misspelling } from '../spelling'
 
 const MIN_WIDTH = 160
 
@@ -323,7 +323,10 @@ export function TextContainer({
         e.stopPropagation()
         // Windows: a right-click on the text goes on to the browser, which reports the
         // red-underlined word under it for the menu opened on the press (see spelling.ts).
-        if (spellingFromRightClick() && editor && editor.view.dom.contains(e.target as Node)) return
+        if (spellingFromRightClick() && editor && editor.view.dom.contains(e.target as Node)) {
+          selectWordForReport(editor, e.clientX, e.clientY)
+          return
+        }
         e.preventDefault()
       }}
     >

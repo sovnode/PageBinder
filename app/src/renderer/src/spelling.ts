@@ -22,10 +22,37 @@ const MAX_SUGGESTIONS = 5
  * word: `webFrame.isWordMisspelled` asks only Chromium's built-in dictionaries, which are off for
  * every language Windows checks, so it always answers "spelled correctly". The browser does report
  * the underlined word and Windows' suggestions when a right-click on the text reaches it (Electron's
- * `context-menu` event, passed on as `spell.onMisspelling`), a moment after the menu has opened.
+ * `context-menu` event, passed on as `spell.onMisspelling`), a moment after the menu has opened,
+ * provided the selection then covers exactly that word (see `selectWordForReport`).
  */
 export function spellingFromRightClick(): boolean {
   return navigator.userAgent.includes('Windows')
+}
+
+/**
+ * Windows: select the word under a right-click for the browser's report of it, and put the earlier
+ * selection back once the browser has looked. The browser names a misspelled word only when the
+ * selection covers exactly that word, and it does not select the word itself for a right-click here.
+ * Call it from the `contextmenu` event: the browser reads the selection straight after that event.
+ * A highlighted stretch of text under the pointer is left as it is.
+ */
+export function selectWordForReport(editor: Editor, x: number, y: number): void {
+  const selection = window.getSelection()
+  if (!selection) return
+  const earlier = selection.rangeCount ? selection.getRangeAt(0).cloneRange() : null
+  if (earlier && !earlier.collapsed && Array.from(earlier.getClientRects()).some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)) return
+  const w = wordAt(editor, x, y)
+  if (!w) return
+  const start = editor.view.domAtPos(w.from, 1)
+  const end = editor.view.domAtPos(w.to, -1)
+  if (start.node.nodeType !== Node.TEXT_NODE || end.node.nodeType !== Node.TEXT_NODE) return
+  selection.setBaseAndExtent(start.node, start.offset, end.node, end.offset)
+  window.setTimeout(() => {
+    const now = window.getSelection()
+    if (!now) return
+    now.removeAllRanges()
+    if (earlier && earlier.startContainer.isConnected && earlier.endContainer.isConnected) now.addRange(earlier)
+  }, 0)
 }
 
 /**
