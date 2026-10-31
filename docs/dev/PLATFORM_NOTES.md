@@ -28,6 +28,12 @@ What each platform has taught us, so the next machine does not relearn it. Add t
 - **Declare every runtime library** in `dependencies`. The installer leaves out anything undeclared. `happy-dom` was missing once and the installed app crashed on launch.
 - **Playwright `app.evaluate`:** use no named inner functions, because tsx's `__name` helper does not exist inside the app.
 - **A key pressed right after a click (tests only).** For a plain click, the editor lets the browser place the cursor and reads it a moment later. If a key arrives first, and the editor still holds an older selection that the key would not change (for example Select All while everything is still selected from before), the late report of the click then collapses the selection. It takes a few milliseconds and shows only on slow machines such as the GitHub runners, on Mac and Windows alike; no person types that fast. Tests wait until the editor has registered the click (its selection is empty) before pressing a key. This, not the ribbon, explains the Windows line-spacing failures of 27 September.
+- **Chromium and scrolling tab strips** (found with the section tabs' pinned +, 1.2.3):
+  - A `position: sticky` box stops at its scroll container's padding edge, not at the edge itself. Put the container's end padding on the sticky box instead.
+  - A focused element that is partly in view is not scrolled at all, neither by `focus()` nor by the Tab key, so a partly covered one stays covered; `scroll-padding` does not help.
+  - When the window becomes active again, Chromium sends `focus` to the window and then to the focused element, which React reports as `onFocus`. Do not scroll on every focus.
+  - Chromium focuses a button on mouse down. Anything that scrolls on focus moves the button before mouse up, so the click can land on another element.
+  - An element reaching 1 px past a scroll container (a negative margin) makes it scroll by that pixel, and shows a scroll bar wherever scroll bars are always shown (Windows, and Macs set that way).
 - **Timing.** Tests must wait for a condition, not for a fixed delay. The crash test and a restored-title check failed on slow machines until they did.
 - **Linux (cloud sessions and CI):** window suites need a display, so run them with `xvfb-run -a npm run e2e`.
 - **Every npm and npx command runs inside `app/`.** The repository root holds only the README, the licence, `CLAUDE.md`, and the `docs/` folder.

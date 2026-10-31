@@ -17,6 +17,39 @@ Entry format:
 
 ---
 
+## 2026-10-31 · lead (macOS, Apple silicon) · main
+**Changed:** v1.2.3 was published as a pre-release from `600a19c` at the user's request (1.2.0 stays Latest), and development moved on to 1.2.4.
+- The + at the end of the section tabs stays in view however many sections there are. It is pinned to the strip's right end, and tabs scroll beneath it.
+- A clicked, newly opened, or tabbed-to tab is brought clear of the + (`reveal` in `SectionTabs.tsx`).
+- The strip no longer shows a stray vertical scroll bar, which 1.2.2 showed wherever scroll bars are always shown.
+- Details are in the 1.2.3 section of `DEVELOPMENT_PLAN.md`; the Chromium lessons are in `PLATFORM_NOTES.md` (Everywhere).
+
+**Found:** Two independent reviews of the change confirmed eleven problems, and all were fixed:
+- scrolling back after renaming another tab;
+- a double-click landing on the wrong tab;
+- Tab focus left beneath the +;
+- the strip jumping when the window regains focus;
+- a 1 px vertical scroll;
+- a stale scroll position when switching notebooks;
+- smaller layout and test-timing points.
+
+This Mac's test windows use always-shown scroll bars, which is how the vertical scroll bar was found.
+
+**Checked:**
+- Mac: type check, 104 unit tests, and every end-to-end suite, three full runs.
+- Each new check in phase 1's step 10 fails without its fix, and the 1.2.2 component fails the first one.
+- Screenshots of the strip from 1.2.2 and 1.2.3, with three sections and with none, match pixel for pixel apart from the removed scroll bar.
+- GitHub's macOS and Windows tests passed, including the new step, as did the release build. `releases/latest` still opens v1.2.0.
+
+**Next platform must check:** Windows: install `PageBinder-Setup-1.2.3.exe` from the v1.2.3 pre-release.
+- In a notebook with many sections, the + stays at the right end.
+- Adding a section with it shows the new tab.
+- No vertical scroll bar appears in the tab strip.
+- The Tab key moves through the tabs.
+- The spelling checks listed for 1.2.2 below still apply.
+
+**Open:** The Windows hand tests above. The dev app started for the user could not open their last notebook, because their own PageBinder window had it open.
+
 ## 2026-10-27 · lead (macOS, Apple silicon) · main
 **Changed:** At the user's request, `fix/windows-spelling` was merged into `main` (fast-forward to `6fa0a44`) and v1.2.2 was published as a pre-release from `1402db1` (1.2.0 stays Latest), so the user can try Windows spelling by hand on a second Windows computer. Development moved on to 1.2.3. While `WINDOWS_SPELLING_PENDING` is true, `scripts/e2e-spelling.ts` prints a warning instead of failing when Windows offers no suggestion; macOS stays strict. The `fix/windows-spelling` branch was deleted.
 **Found:** GitHub's Windows run still offers no suggestion. The browser's report of the test's right-click names no misspelled word (`word: ''`, no suggestions), although "recieve" is underlined (20 red pixels) and selected. Whether a real right-click by hand does better is not known yet. On this Mac, two full end-to-end runs each failed once, at different steps: spelling ("recieve" not found on the page) and phase 6 (the rubber band selected nothing). Both suites passed every time on their own and in a third full run. The spelling failure now prints the page's text.

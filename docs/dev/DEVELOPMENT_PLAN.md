@@ -191,9 +191,11 @@ Published as a pre-release on 30 September 2026.
 - **Recent list remove button.** `.recent-list button { width: 100% }` also stretched the × (`.recent-forget`); it now has its own 28 px size. Phase 8 measures it.
 - **Outlook email text is searchable.** `.msg` bodies were read only from the plain-text body (PidTagBody). Outlook often saves just the HTML body (PidTagHtml, bytes) or only compressed RTF, so their text never reached the index. `msgBodyText` in `app/src/main/search/mail.ts` now falls back to the HTML bytes (decoded with the message's code page) and then to compressed RTF (`@kenjiuno/decompressrtf`, now a direct dependency), turned into text by `rtfToText`, which also handles Outlook's HTML-in-RTF form (`\fromhtml`, `\htmltag`, `\htmlrtf`). `INDEX_VERSION` is 5, so every notebook rebuilds its index once and emails added before the fix become searchable. Unit tests in `test/mail.test.ts` cover each body form; a real Outlook drag still needs checking on Windows.
 
+## Version 1.2.4 (in development)
+
 ## Version 1.2.3
 
-Published as a pre-release on 31 October 2026 (1.2.0 stays the Latest full release).
+Published as a pre-release on 31 October 2026 from commit `600a19c`, at the user's request (1.2.0 stays the Latest full release).
 
 - **The + of the section tabs stays in view** (the user's request, 2026-10-31). It was the last item of the scrolling tab strip, so in a notebook with many sections it could be reached only by scrolling to the end. It now sits in `.tab-add-pin`, which is `position: sticky; right: 0` inside the strip, so tabs scroll beneath it; a light shadow on its left shows that more tabs lie under it (`covering` in `SectionTabs.tsx`, from the strip's scroll position, a `ResizeObserver`, and the tab list). The strip's right padding moved onto the holder: Chromium stops a sticky box at its scroll container's padding edge, so with the padding on the strip the stuck + sat 12 px further left than at the end of the strip and covered part of the last tab. With room for every tab, the strip looks as before (with no tabs, the holder drops its padding so the "No sections yet" hint keeps its place).
 - **Tabs are brought clear of the +** by `reveal` in `SectionTabs.tsx`:
