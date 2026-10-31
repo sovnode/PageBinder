@@ -78,11 +78,21 @@ input { font: inherit; color: inherit; }
 .crumb-wrap { display: inline-flex; align-items: center; }
 
 /* ---------- section tabs ---------- */
-.section-tabs { display: flex; align-items: flex-end; gap: 2px; padding: 8px 12px 0; border-bottom: 1px solid var(--border); background: var(--surface); overflow-x: auto; flex-wrap: nowrap; min-height: 42px; }
+/* overflow-y: hidden: no vertical scroll bar. Until 1.2.3 the open tab reached 1px below the strip
+   (to meet the page), which inside a scroll container was clipped but made the strip scroll by 1px
+   and, wherever scroll bars are always shown (Windows, and Macs set that way), show a vertical scroll
+   bar. The right padding is on the + holder instead (see .tab-add-pin). */
+.section-tabs { display: flex; align-items: flex-end; gap: 2px; padding: 8px 0 0 12px; border-bottom: 1px solid var(--border); background: var(--surface); overflow-x: auto; overflow-y: hidden; flex-wrap: nowrap; min-height: 42px; }
 .tab { padding: 5px 12px 6px; border: 1px solid var(--border); border-bottom: none; border-top-width: 3px; border-radius: 6px 6px 0 0; background: var(--surface-1); color: var(--text-2); white-space: nowrap; }
-.tab.on { background: var(--surface); color: var(--text); font-weight: 600; margin-bottom: -1px; padding-bottom: 7px; }
+.tab.on { background: var(--surface); color: var(--text); font-weight: 600; }
 .tab.group { color: #534ab7; }
 .tab.add { color: var(--muted); border-top-color: var(--border); min-width: 34px; }
+/* The + sticks to the strip's right edge, covering the tabs that scroll beneath it. Its holder carries
+   the strip's right padding (a sticky box stops at a scroll container's padding), so the + sits in the
+   same place whether or not it is stuck. */
+.tab-add-pin { position: sticky; right: 0; z-index: 1; display: flex; align-items: flex-end; align-self: stretch; padding-right: 12px; background: var(--surface); }
+.tab-add-pin.covering { box-shadow: -6px 0 6px -4px rgba(0, 0, 0, 0.18); }
+.tab-add-pin:has(+ .tabs-hint) { padding-right: 0; }
 .folder-icon { font-size: 11px; }
 .tabs-hint { align-self: center; margin-left: 8px; padding-bottom: 6px; }
 

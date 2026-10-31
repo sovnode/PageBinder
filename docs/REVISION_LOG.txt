@@ -7,9 +7,14 @@ Each version opens, shows, edits, prints, and searches notebooks made by the
 versions before it. Nothing ever needs converting.
 
 
-Version 1.2.3 - in development (not yet released)
--------------------------------------------------
+Version 1.2.3 - 31 October 2026 (pre-release)
+---------------------------------------------
 
+- The + for adding a section or section group stays at the right end of
+  the section tabs, however many sections a notebook has. The open
+  section's tab is scrolled into view.
+- The section tabs no longer show a small vertical scroll bar on computers
+  that always show scroll bars, such as Windows.
 
 Version 1.2.2 - 27 October 2026 (pre-release)
 ---------------------------------------------

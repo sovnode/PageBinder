@@ -191,7 +191,30 @@ Published as a pre-release on 30 September 2026.
 - **Recent list remove button.** `.recent-list button { width: 100% }` also stretched the × (`.recent-forget`); it now has its own 28 px size. Phase 8 measures it.
 - **Outlook email text is searchable.** `.msg` bodies were read only from the plain-text body (PidTagBody). Outlook often saves just the HTML body (PidTagHtml, bytes) or only compressed RTF, so their text never reached the index. `msgBodyText` in `app/src/main/search/mail.ts` now falls back to the HTML bytes (decoded with the message's code page) and then to compressed RTF (`@kenjiuno/decompressrtf`, now a direct dependency), turned into text by `rtfToText`, which also handles Outlook's HTML-in-RTF form (`\fromhtml`, `\htmltag`, `\htmlrtf`). `INDEX_VERSION` is 5, so every notebook rebuilds its index once and emails added before the fix become searchable. Unit tests in `test/mail.test.ts` cover each body form; a real Outlook drag still needs checking on Windows.
 
-## Version 1.2.3 (in development)
+## Version 1.2.3
+
+Published as a pre-release on 31 October 2026 (1.2.0 stays the Latest full release).
+
+- **The + of the section tabs stays in view** (the user's request, 2026-10-31). It was the last item of the scrolling tab strip, so in a notebook with many sections it could be reached only by scrolling to the end. It now sits in `.tab-add-pin`, which is `position: sticky; right: 0` inside the strip, so tabs scroll beneath it; a light shadow on its left shows that more tabs lie under it (`covering` in `SectionTabs.tsx`, from the strip's scroll position, a `ResizeObserver`, and the tab list). The strip's right padding moved onto the holder: Chromium stops a sticky box at its scroll container's padding edge, so with the padding on the strip the stuck + sat 12 px further left than at the end of the strip and covered part of the last tab. With room for every tab, the strip looks as before (with no tabs, the holder drops its padding so the "No sections yet" hint keeps its place).
+- **Tabs are brought clear of the +** by `reveal` in `SectionTabs.tsx`:
+  - when another section is opened, or the open section's tab is new to the list. A new section is added at the end and opened at once, so it could otherwise be out of sight. This also covers a notebook reopening on its last page; the strip is remounted for each notebook (`key={tree.root}` in `App.tsx`), so a section with the same name in the next notebook is not mistaken for the one already shown. Renaming, copying, or deleting another tab leaves the strip where the user scrolled it.
+  - when a tab is clicked (also Enter or Space), including the open one, and after the Tab key moves to a tab (`keyup` on the strip). Chromium leaves a partly visible focused tab where it is, which could be mostly beneath the +. Not on every `focus`: Chromium focuses the tab again whenever the window becomes active (after switching apps or closing a dialog), which undid the user's scrolling.
+  - A tab that is partly in view is only uncovered, with no margin, so the pointer stays on it and a double-click to rename lands on the same tab. A tab entirely out of view comes in with an 8 px margin.
+  - Found by two independent reviews. The first version scrolled on every change to the tab list and always added the margin; the second revealed tabs on focus.
+- **No vertical scroll bar in the section tabs.** The open tab reached 1 px below the strip (`margin-bottom: -1px; padding-bottom: 7px`, meant to meet the page). Inside a scroll container that pixel was clipped, so it never showed, but it made the strip scroll vertically by 1 px. Wherever scroll bars are always shown (Windows, and Macs set that way), it also showed a vertical scroll bar at the strip's right end, already in 1.2.2 and even with only three sections. The open tab is now the same height as the others, and the strip has `overflow-y: hidden`. Screenshots of the strip from 1.2.2 and 1.2.3, with three sections and with none, are identical pixel for pixel apart from that scroll bar.
+- **Checks.** Phase 1's step 10 opens a notebook with 40 sections and a section group, and checks through the real window:
+  - at the start of the strip, the + is in view and on top, lines up with the tabs, and shows its shadow;
+  - a mouse press on the + opens its menu without scrolling the strip;
+  - a section added with it is opened and shown clear of the +, and at the end of the strip the + follows the last tab;
+  - the + stays at the right end when scrolled back, and the open tab is shown when the notebook reopens;
+  - renaming a tab that is not open leaves the strip where it was;
+  - a tab reached with the Tab key comes clear of the +;
+  - a click on a tab half beneath the + uncovers it and leaves it under the pointer, both for another tab and for the open one;
+  - the window regaining focus leaves the strip where it was;
+  - the strip cannot scroll up and down;
+  - in a group with two sections, the + follows the last tab with no shadow.
+
+  Each check was confirmed to fail without its fix, and the 1.2.2 component fails the first one.
 
 ## Version 1.2.2
 

@@ -8,7 +8,7 @@ import { promises as fs } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createNotebook } from '../src/main/storage/notebook'
-import { createSection } from '../src/main/storage/section'
+import { createSection, createGroup } from '../src/main/storage/section'
 import { createPage } from '../src/main/storage/page'
 import { verifyChecksum } from '../src/main/storage/checksum'
 import type { PageDoc, TextContainer } from '../src/shared/types'
@@ -182,6 +182,149 @@ async function main(): Promise<void> {
   const titled = await page.locator('.page-row.on', { hasText: 'Renamed page' }).waitFor({ timeout: 5000 }).then(() => true, () => false)
   assert(titled, 'draft title restored')
   await page.screenshot({ path: join(shots, 'final.png') })
+  await close()
+
+  // 10. With more sections than fit, the + stays in view at the right end of the strip, above the
+  //     tabs that scroll beneath it, and the open section's tab is brought into view beside it.
+  const many = await createNotebook(base, 'Many sections')
+  for (let i = 1; i <= 40; i++) await createSection(many, '', `Section number ${i}`)
+  const group = await createGroup(many, '', 'Small group')
+  await createSection(many, group, 'Inside one')
+  await createSection(many, group, 'Inside two')
+  ;({ app, page, close } = await launch(many))
+  const strip = (): Promise<{ overflow: number; scrollLeft: number; left: number; right: number; add: { left: number; right: number; bottom: number }; addOnTop: boolean; covering: boolean; tabBottom: number; lastTabRight: number; on: { left: number; right: number; onTop: boolean } | null }> =>
+    page.evaluate(() => {
+      const el = document.querySelector('.section-tabs')!
+      const add = el.querySelector('.tab.add')!.getBoundingClientRect()
+      const tabs = Array.from(el.querySelectorAll('.tab:not(.add)'))
+      const plain = tabs.find((t) => !t.classList.contains('on'))!.getBoundingClientRect()
+      const on = el.querySelector('.tab.on')
+      const o = on?.getBoundingClientRect()
+      const box = el.getBoundingClientRect()
+      return {
+        overflow: el.scrollWidth - el.clientWidth,
+        scrollLeft: el.scrollLeft,
+        left: box.left,
+        right: box.right,
+        add: { left: add.left, right: add.right, bottom: add.bottom },
+        addOnTop: document.elementFromPoint(add.left + add.width / 2, add.top + add.height / 2) === el.querySelector('.tab.add'),
+        covering: !!el.querySelector('.tab-add-pin.covering'),
+        tabBottom: plain.bottom,
+        lastTabRight: tabs[tabs.length - 1]!.getBoundingClientRect().right,
+        on: o && on ? { left: o.left, right: o.right, onTop: document.elementFromPoint(o.left + o.width / 2, o.top + o.height / 2) === on } : null
+      }
+    })
+  let s = await strip()
+  assert(s.overflow > 200 && s.scrollLeft === 0, `the tabs run past the window (${s.overflow} px more, scrolled ${s.scrollLeft})`)
+  assert(s.add.left >= s.left && s.add.right <= s.right && s.addOnTop, `the + is in view at the start of the strip (${JSON.stringify(s)})`)
+  assert(Math.abs(s.add.bottom - s.tabBottom) < 1.5, `the + lines up with the tabs (${s.add.bottom} and ${s.tabBottom})`)
+  assert(s.covering, 'the + shows that tabs continue beneath it')
+  await page.screenshot({ path: join(shots, 'many-sections.png') })
+  // Clicked where the user sees it, the + opens its menu and leaves the tabs where they are.
+  await page.mouse.click((s.add.left + s.add.right) / 2, s.add.bottom - 10)
+  await page.waitForSelector('.context-menu')
+  assert((await strip()).scrollLeft === 0, 'pressing the + leaves the tabs where they are')
+  await page.locator('.context-item', { hasText: /^New section…$/ }).click()
+  await page.locator('.dialog input').fill('Added at the end')
+  await page.locator('.dialog button[type=submit]').click()
+  await page.waitForSelector('.tab.on:has-text("Added at the end")')
+  s = await strip()
+  assert(s.on && s.on.left >= s.left && s.on.right <= s.add.left && s.on.onTop, `the new section's tab is brought into view, clear of the + (${JSON.stringify(s)})`)
+  assert(!s.covering && s.add.left - s.lastTabRight < 4, `at the end of the strip the + follows the last tab (${JSON.stringify(s)})`)
+  step('with many sections the + stays in view, and a section added with it is shown')
+
+  // Scrolled back to the start, the + is still there; the open tab comes back into view when the
+  // notebook is opened again (on its last page, so the new section gets one).
+  await page.locator('.page-row.add').click()
+  await page.locator('.page-row.renaming input').fill('Last page')
+  await page.keyboard.press('Enter')
+  await page.waitForSelector('.page-row.on:has-text("Last page")')
+  await page.locator('.section-tabs').evaluate((el) => el.scrollTo(0, 0))
+  await page.waitForSelector('.tab-add-pin.covering', { timeout: 5000 }).catch(() => undefined)
+  s = await strip()
+  assert(s.addOnTop && s.add.right <= s.right && s.covering, `the + stays at the right end when scrolled back (${JSON.stringify(s)})`)
+  await close()
+  ;({ app, page, close } = await launch(many))
+  await page.waitForSelector('.tab.on:has-text("Added at the end")')
+  s = await strip()
+  assert(s.on && s.on.left >= s.left && s.on.right <= s.add.left && s.on.onTop, `on reopening, the open section's tab is in view (${JSON.stringify(s)})`)
+  // Renaming a tab that is not open leaves the strip where the user scrolled it.
+  await page.locator('.section-tabs').evaluate((el) => el.scrollTo(0, 0))
+  await page.waitForSelector('.tab-add-pin.covering', { timeout: 5000 }).catch(() => undefined)
+  await page.locator('.section-tabs .tab', { hasText: /^Section number 2$/ }).click({ button: 'right' })
+  await page.locator('.context-item', { hasText: /^Rename…$/ }).click()
+  await page.locator('.dialog input').fill('Second, renamed')
+  await page.locator('.dialog button[type=submit]').click()
+  await page.waitForSelector('.section-tabs .tab:has-text("Second, renamed")')
+  assert((await strip()).scrollLeft === 0, 'renaming a tab that is not open leaves the strip where it was')
+  // A tab reached with the Tab key comes clear of the + (the browser leaves a half-hidden one as it is).
+  // Focus the tab before the one half beneath the +, then press Tab.
+  const target = await page.evaluate(() => {
+    const el = document.querySelector('.section-tabs')!
+    const pinLeft = el.querySelector('.tab-add-pin')!.getBoundingClientRect().left
+    const tabs = Array.from(el.querySelectorAll<HTMLElement>('.tab:not(.add)'))
+    const i = tabs.findIndex((t) => t.getBoundingClientRect().right > pinLeft)
+    tabs[i - 1]!.focus()
+    return { name: tabs[i]!.textContent ?? '' }
+  })
+  await page.keyboard.press('Tab')
+  const focused = await page.evaluate(() => {
+    const el = document.querySelector('.section-tabs')!
+    const tab = document.activeElement as HTMLElement
+    return { name: tab.textContent, right: tab.getBoundingClientRect().right, pinLeft: el.querySelector('.tab-add-pin')!.getBoundingClientRect().left }
+  })
+  assert(focused.name === target.name && focused.right <= focused.pinLeft + 0.5, `a tab reached with the Tab key is not left beneath the + (${JSON.stringify(target)}; ${JSON.stringify(focused)})`)
+  // Clicking the visible part of a tab half beneath the + opens it and uncovers it without moving
+  // another tab under the pointer, so a double-click (to rename) stays on that tab. The second time
+  // it is already open, and focused.
+  for (let round = 0; round < 2; round++) {
+    const half = await page.evaluate(() => {
+      const el = document.querySelector('.section-tabs')!
+      const pin = el.querySelector('.tab-add-pin')!.getBoundingClientRect()
+      const tab = el.querySelectorAll<HTMLElement>('.tab:not(.add)')[12]!
+      const r0 = tab.getBoundingClientRect()
+      el.scrollLeft += (r0.left + r0.right) / 2 - pin.left
+      const r = tab.getBoundingClientRect()
+      return { name: tab.textContent ?? '', x: pin.left - 3, y: (r.top + r.bottom) / 2, partly: r.left < pin.left - 20 && r.right > pin.left + 20 }
+    })
+    assert(half.partly, `a tab is partly beneath the + (${JSON.stringify(half)})`)
+    await page.mouse.click(half.x, half.y)
+    await page.waitForSelector(`.tab.on:has-text("${half.name}")`)
+    const after = await page.evaluate((p) => {
+      const el = document.querySelector('.section-tabs')!
+      const on = el.querySelector('.tab.on')!
+      return { same: document.elementFromPoint(p.x, p.y) === on, right: on.getBoundingClientRect().right, pinLeft: el.querySelector('.tab-add-pin')!.getBoundingClientRect().left }
+    }, half)
+    assert(after.same && after.right <= after.pinLeft + 0.5, `the clicked tab is uncovered and still under the pointer (round ${round + 1}: ${JSON.stringify(after)})`)
+  }
+  // When the window becomes active again, the browser focuses the clicked tab once more (the window's
+  // focus event, then the tab's); the strip stays where the user scrolled it.
+  const refocused = await page.evaluate(async () => {
+    const el = document.querySelector('.section-tabs')!
+    const tab = el.querySelector<HTMLElement>('.tab.on')!
+    el.scrollLeft = 0
+    const before = el.scrollLeft
+    window.dispatchEvent(new FocusEvent('focus'))
+    tab.dispatchEvent(new FocusEvent('focus'))
+    tab.dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))
+    return { focused: document.activeElement === tab, before, after: el.scrollLeft }
+  })
+  assert(refocused.focused && refocused.after === refocused.before, `the strip stays put when the window is focused again (${JSON.stringify(refocused)})`)
+  // The strip has nothing to scroll up and down.
+  const tall = await page.evaluate(() => {
+    const el = document.querySelector('.section-tabs')!
+    el.querySelector<HTMLElement>('.tab.on')!.focus()
+    el.scrollTop = 5
+    return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
+  })
+  assert(tall.scrollTop === 0 && tall.scrollHeight === tall.clientHeight, `the tabs strip does not scroll up and down (${JSON.stringify(tall)})`)
+  // In a section group with only a few sections, the + sits straight after the last tab.
+  await page.locator('.tab.group', { hasText: 'Small group' }).click()
+  await page.waitForSelector('.section-tabs .tab:has-text("Inside two")')
+  s = await strip()
+  assert(s.overflow <= 0 && !s.covering && s.add.left - s.lastTabRight < 4 && s.addOnTop, `with few sections the + follows the last tab (${JSON.stringify(s)})`)
+  step('renaming another tab keeps the strip in place, a tab reached by Tab or a click comes clear of the +, and with room the + follows the last tab')
   await close()
   process.stdout.write(`\nPASS: ${steps.length} steps. Notebook kept at ${root}\n`)
 }

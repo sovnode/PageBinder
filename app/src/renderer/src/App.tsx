@@ -1739,6 +1739,7 @@ export function App(): JSX.Element {
           onNavigate={(rel) => void navigateGroup(tree, rel)}
         />
         <SectionTabs
+          key={tree.root}
           children={children}
           activeSectionRel={sectionRel}
           onSelectSection={(rel) => void selectSection(tree, rel)}
