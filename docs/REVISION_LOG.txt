@@ -11,8 +11,8 @@ Version 1.2.4 - in development (not yet released)
 -------------------------------------------------
 
 
-Version 1.2.3 - 31 October 2026 (pre-release)
----------------------------------------------
+Version 1.2.3 - 31 October 2026
+-------------------------------
 
 - The + for adding a section or section group stays at the right end of
   the section tabs, however many sections a notebook has. The open
@@ -20,12 +20,12 @@ Version 1.2.3 - 31 October 2026 (pre-release)
 - The section tabs no longer show a small vertical scroll bar on computers
   that always show scroll bars, such as Windows.
 
+
 Version 1.2.2 - 27 October 2026 (pre-release)
 ---------------------------------------------
 
 - Windows: right-clicking a word underlined in red offers suggested
-  spellings and Add to dictionary, as on macOS. This pre-release is for
-  testing that on Windows.
+  spellings and Add to dictionary, as on macOS.
 
 
 Version 1.2.1 - 25 October 2026 (pre-release)

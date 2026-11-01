@@ -149,11 +149,12 @@ async function misspelledMenu(app: ElectronApplication, page: Page, word: string
 }
 
 /**
- * Windows spelling suggestions, pending a check by hand (2026-10-27). In GitHub's Windows runs the
- * browser reports no misspelled word for the test's simulated right-click, even with the word
- * underlined and selected; whether a real right-click does is being tried by hand on Windows with
- * 1.2.2. Until then a missing suggestion on Windows is reported, not counted as a failure, so the
- * rest of the Windows run still means something. Set this to false once that is settled.
+ * Windows spelling suggestions, pending in automated runs. In GitHub's Windows runs the browser
+ * reports no misspelled word for the test's simulated right-click, even with the word underlined and
+ * selected (2026-10-27), while a real right-click does offer suggestions (checked by hand on Windows
+ * with 1.2.3, 2026-10-31). Until an automated run sees them too, a missing suggestion on Windows is
+ * reported, not counted as a failure, so the rest of the Windows run still means something. Set this
+ * to false once it does.
  */
 const WINDOWS_SPELLING_PENDING = true
 

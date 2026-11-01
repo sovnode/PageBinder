@@ -18,6 +18,25 @@ Entry format:
 ---
 
 ## 2026-10-31 · lead (macOS, Apple silicon) · main
+**Changed:** After the user tested 1.2.3, at their request (confirmed when asked), v1.2.3 was made the Latest full release and v1.2.0, v1.2.1, and v1.2.2 were turned into drafts with their notes, installers, and tags kept. v1.2.3 is now the only public release. At the user's choice its notes and attached revision log were left unchanged.
+- The README's top link reads "Download PageBinder 1.2.3" and still opens the latest release. `CLAUDE.md` (Published releases) now says to change that number whenever another version becomes Latest.
+- `docs/REVISION_LOG.txt`: 1.2.3 is no longer marked as a pre-release, and 1.2.2's "this pre-release is for testing" note is gone.
+- `WINDOWS_SPELLING_PENDING` in `scripts/e2e-spelling.ts` stays true; only its comment changed, to record the hand check.
+
+**Found:** The user confirmed that Windows spelling suggestions work by hand. GitHub's automated Windows run still sees no misspelled word for the test's simulated right-click, so turning `WINDOWS_SPELLING_PENDING` off would fail every Windows run. It stays on until an automated run sees the suggestions too.
+
+**Checked:** Without signing in, GitHub shows only v1.2.3:
+- the releases API lists only v1.2.3, and `releases/latest` opens it;
+- its four files download through `releases/latest/download/`;
+- the v1.2.0, v1.2.1, and v1.2.2 release pages show no notes or files, and a 1.2.0 installer link returns 404.
+
+The tags `v1.2.0` to `v1.2.3` are still on GitHub. Only a comment changed in the program's files: the type check passes, and no other tests were run.
+
+**Next platform must check:** nothing.
+
+**Open:** Make GitHub's Windows run see spelling suggestions, then set `WINDOWS_SPELLING_PENDING` to false. No way to do this is known yet. The 2026-10-27 lead entry below names one possible change, turning off Chromium's `WinUseBrowserSpellChecker`. It would change how PageBinder checks spelling on Windows, so it needs the user's go-ahead.
+
+## 2026-10-31 · lead (macOS, Apple silicon) · main
 **Changed:** v1.2.3 was published as a pre-release from `600a19c` at the user's request (1.2.0 stays Latest), and development moved on to 1.2.4.
 - The + at the end of the section tabs stays in view however many sections there are. It is pinned to the strip's right end, and tabs scroll beneath it.
 - A clicked, newly opened, or tabbed-to tab is brought clear of the + (`reveal` in `SectionTabs.tsx`).
@@ -185,24 +204,3 @@ If suggestions appear by hand, find a way for the automated run to see them too 
 **Checked:** Version fields in `package.json` and `package-lock.json`.
 **Next platform must check:** Nothing.
 **Open:** Unchanged.
-
-## 2026-09-28 · lead (macOS, Apple silicon) · main
-**Changed:** Pictures inside text (word wrap option 1): Insert picture… in a text box's right-click menu; Wrap (in line, left, right), Size (25, 50, 75, 100 per cent), and Remove picture on a picture's right-click menu. Stored as a `textImage` node naming a file in the page's images folder, listed in the manifest. Page breaks count an in-line picture as part of its line. The app keeps its own manifest when the canvas reports a change. Recorded under "Next version" in the revision log and development plan; the version number is unchanged until the next release.
-**Found:** Inserting a picture into text lost its manifest entry, because the canvas's change carried a file list a moment old; fixed in `onPageChange`. Versions 1.1.1 and earlier do not know the new content: they show such a text box empty, and typing in that box there replaces its stored text (checked in TipTap 3.31's content loading; noted in FUTURE_FEATURES.md).
-**Checked:** Type check; 77 unit tests (new: picture rendering, name listing and renaming); phase 8's new step (insert, stored and listed, loads, prints, wraps with text beside it, sizes to a quarter, copies with its text box to another page, removes); every other window suite rerun. Screenshots of the editor and page.html match.
-**Next platform must check:** Windows: insert a picture into text, wrap it left, and check the screen against Print Preview.
-**Open:** Release the next version when the user asks; until it is installed everywhere, do not edit pages with pictures in text in 1.1.1 or 1.1.0.
-
-## 2026-09-28 · lead (macOS, Apple silicon) · main
-**Changed:** Version 1.1.1 (line-by-line page breaks, line spacing, the Order menu, editor and print alignment), to be published as a pre-release. Added `docs/REVISION_LOG.txt`, a plain-text description of every version for users; `release.yml` now attaches it to every release as `PageBinder-revision-log.txt` and puts the version's own section in the release notes. The development plan has a Version 1.1.1 section. The user asked for exactly two published pre-releases (1.1.0 and 1.1.1) and nothing else, so the duplicate v1.1.0 draft is deleted.
-**Found:** GitHub's "latest release" link skips pre-releases; with only pre-releases, the README's download link lands on the Releases page, which lists them, so it still works.
-**Checked:** The notes extraction was run locally against the log for 1.1.1 and 1.0.1. See the commit's workflow run, the 1.1.1 release run, and the final release list.
-**Next platform must check:** Windows: install PageBinder-Setup-1.1.1.exe over 1.1.0 and confirm the Keep or Start fresh question and that notebooks open unchanged.
-**Open:** Word wrap choice; tall tables across page breaks; document-wide undo (all in FUTURE_FEATURES.md).
-
-## 2026-09-28 · lead (macOS, Apple silicon) · main
-**Changed:** New standing rule: a published release is never overwritten (see `CLAUDE.md`, "Published releases"). `release.yml` gained a first job that checks for a published release of the version: when publishing a draft created the tag, the run stops quietly; when started by hand for a published version, it fails and asks for a new version number. Builds no longer run in either case.
-**Found:** v1.1.0 was published as a pre-release on 27 September from `7606ede` (printout search). Publishing created the `v1.1.0` tag, which started `release.yml` and produced a second, identical v1.1.0 draft. Nothing public was replaced; the extra draft is still there.
-**Checked:** The workflow parses; its release query, run against the repository, finds one published v1.1.0 release and none for v1.2.0. The first run of the changed workflow will be the proof.
-**Next platform must check:** Nothing.
-**Open:** The changes since `7606ede` (line-by-line page breaks, line spacing, the Order menu, editor/print alignment) need a new version number (for example 1.1.1 or 1.2.0) to reach a new draft. The duplicate v1.1.0 draft can be deleted if the user wants.
