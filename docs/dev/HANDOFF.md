@@ -18,6 +18,23 @@ Entry format:
 ---
 
 ## 2026-11-01 · lead (macOS, Apple silicon) · main
+**Changed:** After the user tested the ribbon fix, v1.2.4 was published from `abd9905` as the Latest full release. v1.2.3 was turned into a draft (confirmed when asked), so v1.2.4 is the only public release. Development moved on to 1.2.5.
+- The user first asked for a pre-release. GitHub's `releases/latest`, which the README's links use, finds no pre-release, so the user chose a full release instead (`DECISIONS.md`).
+- The README's link reads "Download PageBinder 1.2.4".
+- `scripts/e2e-platforms.ts` now waits for the first-run panel. It shows only once the recent list has arrived, and a slow GitHub Windows run (on `9da05ab`) had looked too soon.
+
+**Found:** That Windows failure was the test's timing, not the program: `Welcome` starts with `recent` as null and shows the panel only once the list is known to be empty.
+
+**Checked:**
+- GitHub's macOS and Windows tests passed on `abd9905`: all six jobs, including notebooks opened across the two installed apps. The release build passed too.
+- The v1.2.4 notes and its four files were checked before publishing.
+- Without signing in: the releases API lists only v1.2.4, and `releases/latest` opens it. Its four files download, and v1.2.3's installer returns 404.
+
+**Next platform must check:** Windows: install `PageBinder-Setup-1.2.4.exe` and click between words in different fonts and sizes, in one text box and in another. The font, size, B, I, and U should match each time.
+
+**Open:** Nothing from this task. Making GitHub's Windows run see spelling suggestions is still open (2026-10-31 entry).
+
+## 2026-11-01 · lead (macOS, Apple silicon) · main
 **Changed:** 1.2.4: the ribbon follows the caret (the user's report). Its font, size, and style controls now redraw whenever the look at the caret changes (`useEditorState` and `lookAt` in `Toolbar.tsx`). Before, they kept the look of the place before until something was typed.
 - A font or size the lists lack shows as it is. Before, a controlled `<select>` showed its first entry, so pasted 15 px Calibri showed as 14.
 - A pasted font named like a listed one (Outlook's `"Calibri",sans-serif`) shows as the listed entry.
@@ -32,7 +49,7 @@ Entry format:
 
 **Next platform must check:** Windows, once 1.2.4 is built: click between differently formatted words in one text box and in another box. The font, size, B, I, and U should change to match each time.
 
-**Open:** The user's test by hand before pushing.
+**Open:** The user's test by hand before pushing (done: the user approved it, and it shipped in 1.2.4).
 
 ## 2026-10-31 · lead (macOS, Apple silicon) · main
 **Changed:** After the user tested 1.2.3, at their request (confirmed when asked), v1.2.3 was made the Latest full release and v1.2.0, v1.2.1, and v1.2.2 were turned into drafts with their notes, installers, and tags kept. v1.2.3 is now the only public release. At the user's choice its notes and attached revision log were left unchanged.
@@ -207,10 +224,3 @@ If suggestions appear by hand, find a way for the automated run to see them too 
 **Checked:** Type check; unit tests; every end-to-end suite after the highlight fix. The heading removal was checked by the user in the running app; its phase 2 test change has not been run yet.
 **Next platform must check:** Windows: install the new PageBinder-Setup-1.1.1.exe; check the alignment buttons, that no heading buttons show, and that a page with pictures in a text box prints as shown.
 **Open:** Nothing. Afterwards the phase 8 picture step failed on the GitHub macOS runner only: its smaller screen left the text box's move bar under the toolbar, so the drag missed it. The test now hovers the bar into view, checks it is uncovered, and measures the picture relative to the box (commits `109bbfc`, `23f30a4`). CI passes on macOS and Windows, and phase 2 passes locally with the heading change.
-
-## 2026-09-28 · lead (macOS, Apple silicon) · main
-**Changed:** Word wrap reworked after the user's testing: pictures are now anchored in a text box (the box's `pictures` list) at a spot the user chooses, a fixed pixel size, text flowing down beside them. Drag to move, corner to resize, Delete to remove, Insert picture at the right-clicked spot. Shared float layout in `app/src/shared/render/anchoredPictures.ts`, editor widgets in `app/src/renderer/src/anchoredPicturesView.ts`. New standing rule: the user tests new features before anything is pushed (`CLAUDE.md`).
-**Found:** The first version (a picture inside a line) resized with the box, could not be placed freely, and wrapped in line rather than beside the text.
-**Checked:** Type check; 78 unit tests (new: float layout); phase 8's rewritten picture step (placed at the click, three or more lines beside it, corner resize keeps shape, box resize keeps its size, drag lands exactly, moves with the box, same spot in page.html, copied to another page with its file, Delete) and every other suite. Waiting for the user's hands-on test before pushing.
-**Next platform must check:** After approval: Windows, insert and drag a picture in a text box and compare with Print Preview.
-**Open:** Text flows down one side of a picture only.
