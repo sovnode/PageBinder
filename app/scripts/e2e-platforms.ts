@@ -53,6 +53,9 @@ async function main(): Promise<void> {
   // 1. First run: no recent notebooks, so the Welcome screen explains the basics.
   {
     const { app, page } = await launch(join(base, 'fresh-user'))
+    // The recent list arrives a moment after the Welcome screen, and the panel shows once it is known
+    // to be empty (a slow GitHub Windows run looked too soon on 2026-11-01).
+    await page.locator('.first-run').waitFor({ timeout: 10000 }).catch(() => undefined)
     assert(await page.locator('.first-run').count(), 'first-run panel shown with no recent notebooks')
     const text = await page.locator('.first-run').innerText()
     assert(/ordinary folder/.test(text) && /history/.test(text) && /back up/i.test(text), `first-run panel covers folders, history, and backup (${text})`)

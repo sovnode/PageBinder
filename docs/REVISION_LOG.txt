@@ -7,8 +7,8 @@ Each version opens, shows, edits, prints, and searches notebooks made by the
 versions before it. Nothing ever needs converting.
 
 
-Version 1.2.4 - in development (not yet released)
--------------------------------------------------
+Version 1.2.4 - 1 November 2026
+-------------------------------
 
 - The font, size, and style buttons at the top now follow the cursor. They
   show the look of the text where the cursor is, wherever it is clicked or
