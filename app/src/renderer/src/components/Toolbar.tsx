@@ -1,5 +1,6 @@
 import type { JSX } from 'react'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useEditorState, type Editor } from '@tiptap/react'
 import { useActiveEditor } from '../editorContext'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import { applyFormat, captureFormat, domSelectionRange, editorAt, type CapturedFormat } from '../formatPainter'
@@ -9,6 +10,63 @@ import type { DrawTool } from '@shared/types'
 import type React from 'react'
 
 type SaveStatus = 'saved' | 'unsaved' | 'saving'
+
+/** What the ribbon shows for the text at the caret, or for the highlighted text (the first font and size found in it). */
+interface Look {
+  fontFamily: string
+  fontSize: string
+  color: string | undefined
+  backgroundColor: string | undefined
+  lineHeight: string
+  bold: boolean
+  italic: boolean
+  underline: boolean
+  strike: boolean
+  bulletList: boolean
+  orderedList: boolean
+  taskList: boolean
+  blockquote: boolean
+  codeBlock: boolean
+  focused: boolean
+}
+
+function lookAt(editor: Editor | null): Look | null {
+  if (!editor || editor.isDestroyed) return null
+  const attrs = editor.getAttributes('textStyle')
+  return {
+    fontFamily: (attrs['fontFamily'] as string | undefined) ?? '',
+    fontSize: ((attrs['fontSize'] as string | undefined) ?? '').replace('px', ''),
+    color: attrs['color'] as string | undefined,
+    backgroundColor: attrs['backgroundColor'] as string | undefined,
+    lineHeight: ((editor.isActive('heading') ? editor.getAttributes('heading') : editor.getAttributes('paragraph'))['lineHeight'] as string | null) ?? STANDARD_LINE_HEIGHT,
+    bold: editor.isActive('bold'),
+    italic: editor.isActive('italic'),
+    underline: editor.isActive('underline'),
+    strike: editor.isActive('strike'),
+    bulletList: editor.isActive('bulletList'),
+    orderedList: editor.isActive('orderedList'),
+    taskList: editor.isActive('taskList'),
+    blockquote: editor.isActive('blockquote'),
+    codeBlock: editor.isActive('codeBlock'),
+    focused: editor.isFocused
+  }
+}
+
+/**
+ * A group of ribbon controls. It is made once, outside Toolbar: a component made inside it is a new
+ * one on every render, so React replaced every control's element whenever the ribbon was drawn
+ * again. Now that the ribbon redraws as the caret moves and as a text box loses focus, a press on a
+ * control that takes the focus (the zoom buttons, the font list) would land on an element that is
+ * gone by the time the button is released, and the click was lost.
+ */
+function G({ children }: { children: React.ReactNode }): JSX.Element {
+  return <span className="tb-group">{children}</span>
+}
+
+/** A font's name from its CSS list: `Aptos, sans-serif` is Aptos. */
+function fontName(family: string): string {
+  return family.split(',')[0]!.trim().replace(/^["']|["']$/g, '')
+}
 
 
 export function Toolbar({
@@ -42,6 +100,11 @@ export function Toolbar({
   onShapeStyle: (style: { stroke?: string; fill?: string | null }) => void
 }): JSX.Element {
   const { editor } = useActiveEditor()
+  // Read again after every change to the active text box's text or caret, so the ribbon follows the
+  // caret (the user's report, 2026-11-01: it kept showing the font, size, and bold of the place
+  // before until something was typed). The editor is the current one, not the snapshot's, which
+  // lags one transaction behind when another text box becomes active.
+  const look = useEditorState({ editor, selector: () => lookAt(editor) })
   const [menu, setMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null)
   const keep = (e: MouseEvent): void => e.preventDefault()
   const can = !!editor
@@ -107,13 +170,22 @@ export function Toolbar({
   }
   const colorMenu = (current: string | undefined, pick: (c: string) => void, clear: () => void, clearLabel: string): MenuItem[] => [{ colors: { current: current ?? null, onPick: pick, onClear: clear, clearLabel } }]
 
-  const shapeTarget = hasShapeSelection && !editor?.isFocused
-  const attrs = editor?.getAttributes('textStyle') ?? {}
-  const fontFamily = (attrs['fontFamily'] as string | undefined) ?? ''
-  const fontSize = ((attrs['fontSize'] as string | undefined) ?? '').replace('px', '')
-  const lineHeight = ((editor ? (editor.isActive('heading') ? editor.getAttributes('heading') : editor.getAttributes('paragraph'))['lineHeight'] : null) as string | null) ?? STANDARD_LINE_HEIGHT
+  const shapeTarget = hasShapeSelection && !look?.focused
+  const fontFamily = look?.fontFamily ?? ''
+  const fontSize = look?.fontSize ?? ''
+  const lineHeight = look?.lineHeight ?? STANDARD_LINE_HEIGHT
+  // A font or size the lists lack (text pasted from elsewhere, such as Outlook's 15 px Calibri or
+  // 11 pt sizes) is shown as it is while the caret is in it. Otherwise the list would show its first
+  // entry, System or 14. A pasted font named like a listed one (Outlook writes `"Calibri",sans-serif`)
+  // shows as that entry rather than as a second one of the same name.
+  const listedFont = !fontFamily ? FONT_FAMILIES[0] : (FONT_FAMILIES.find((f) => f.value === fontFamily) ?? FONT_FAMILIES.find((f) => f.value && f.label.toLowerCase() === fontName(fontFamily).toLowerCase()))
+  const fonts = listedFont ? FONT_FAMILIES : [...FONT_FAMILIES, { label: fontName(fontFamily), value: fontFamily }]
+  const sizes = FONT_SIZES.map(String)
+  if (fontSize && !sizes.includes(fontSize)) {
+    const after = sizes.findIndex((n) => Number(n) > Number(fontSize))
+    sizes.splice(after < 0 || Number.isNaN(Number(fontSize)) ? sizes.length : after, 0, fontSize)
+  }
 
-  const G = ({ children }: { children: React.ReactNode }): JSX.Element => <span className="tb-group">{children}</span>
   return (
     <div className="toolbar-wrap">
       <div className="toolbar">
@@ -125,17 +197,17 @@ export function Toolbar({
           </button>
         </G>
         <G>
-          <select className="tb-select font" disabled={!can} value={fontFamily} title="Font" onChange={(e) => (e.target.value ? chain().setFontFamily(e.target.value).run() : chain().unsetFontFamily().run())}>
-            {FONT_FAMILIES.map((f) => (
-              <option key={f.label} value={f.value} style={{ fontFamily: f.value || undefined }}>
+          <select className="tb-select font" disabled={!can} value={listedFont?.value ?? fontFamily} title="Font" onChange={(e) => (e.target.value ? chain().setFontFamily(e.target.value).run() : chain().unsetFontFamily().run())}>
+            {fonts.map((f) => (
+              <option key={f.value} value={f.value} style={{ fontFamily: f.value || undefined }}>
                 {f.label}
               </option>
             ))}
           </select>
           <select className="tb-select size" disabled={!can} value={fontSize} title="Font size" onChange={(e) => (e.target.value ? chain().setFontSize(`${e.target.value}px`).run() : chain().unsetFontSize().run())}>
             <option value="">14</option>
-            {FONT_SIZES.map((n) => (
-              <option key={n} value={String(n)}>
+            {sizes.map((n) => (
+              <option key={n} value={n}>
                 {n}
               </option>
             ))}
@@ -162,10 +234,10 @@ export function Toolbar({
           >
             <PainterIcon />
           </button>
-          {b('B', !!editor?.isActive('bold'), () => chain().toggleBold().run(), 'Bold (⌘B)', can, 'bold')}
-          {b('I', !!editor?.isActive('italic'), () => chain().toggleItalic().run(), 'Italic (⌘I)', can, 'italic')}
-          {b('U', !!editor?.isActive('underline'), () => chain().toggleUnderline().run(), 'Underline (⌘U)', can, 'underline')}
-          {b('S', !!editor?.isActive('strike'), () => chain().toggleStrike().run(), 'Strikethrough', can, 'strike')}
+          {b('B', !!look?.bold, () => chain().toggleBold().run(), 'Bold (⌘B)', can, 'bold')}
+          {b('I', !!look?.italic, () => chain().toggleItalic().run(), 'Italic (⌘I)', can, 'italic')}
+          {b('U', !!look?.underline, () => chain().toggleUnderline().run(), 'Underline (⌘U)', can, 'underline')}
+          {b('S', !!look?.strike, () => chain().toggleStrike().run(), 'Strikethrough', can, 'strike')}
           <button
             type="button"
             className="tb color"
@@ -173,10 +245,10 @@ export function Toolbar({
             onMouseDown={keep}
             title={shapeTarget ? 'Line colour of the selected shapes' : 'Text colour'}
             onClick={(e) =>
-              openMenu(e, colorMenu(attrs['color'] as string | undefined, (c) => (shapeTarget ? onShapeStyle({ stroke: c }) : chain().setColor(c).run()), () => (shapeTarget ? onShapeStyle({ stroke: '#2c2c2a' }) : chain().unsetColor().run()), 'Automatic'))
+              openMenu(e, colorMenu(look?.color, (c) => (shapeTarget ? onShapeStyle({ stroke: c }) : chain().setColor(c).run()), () => (shapeTarget ? onShapeStyle({ stroke: '#2c2c2a' }) : chain().unsetColor().run()), 'Automatic'))
             }
           >
-            A<span className="color-bar" style={{ background: (attrs['color'] as string | undefined) ?? '#2c2c2a' }} />
+            A<span className="color-bar" style={{ background: look?.color ?? '#2c2c2a' }} />
           </button>
           <button
             type="button"
@@ -187,11 +259,11 @@ export function Toolbar({
             onClick={(e) =>
               openMenu(
                 e,
-                colorMenu(attrs['backgroundColor'] as string | undefined, (c) => (shapeTarget ? onShapeStyle({ fill: c }) : chain().setBackgroundColor(c).run()), () => (shapeTarget ? onShapeStyle({ fill: null }) : chain().unsetBackgroundColor().run()), shapeTarget ? 'No fill (see through)' : 'No highlight')
+                colorMenu(look?.backgroundColor, (c) => (shapeTarget ? onShapeStyle({ fill: c }) : chain().setBackgroundColor(c).run()), () => (shapeTarget ? onShapeStyle({ fill: null }) : chain().unsetBackgroundColor().run()), shapeTarget ? 'No fill (see through)' : 'No highlight')
               )
             }
           >
-            ▆<span className="color-bar" style={{ background: (attrs['backgroundColor'] as string | undefined) ?? '#fac775' }} />
+            ▆<span className="color-bar" style={{ background: look?.backgroundColor ?? '#fac775' }} />
           </button>
         </G>
         <G>
@@ -201,11 +273,11 @@ export function Toolbar({
           {b(<AlignIcon kind="justify" />, false, () => chain().setTextAlign('justify').run(), 'Justify', can, 'tb-icon')}
         </G>
         <G>
-          {b('• List', !!editor?.isActive('bulletList'), () => chain().toggleBulletList().run(), 'Bulleted list')}
-          {b('1. List', !!editor?.isActive('orderedList'), () => chain().toggleOrderedList().run(), 'Numbered list')}
-          {b('☑ To do', !!editor?.isActive('taskList'), () => chain().toggleTaskList().run(), 'To do list')}
-          {b('❝', !!editor?.isActive('blockquote'), () => chain().toggleBlockquote().run(), 'Quote')}
-          {b('</>', !!editor?.isActive('codeBlock'), () => chain().toggleCodeBlock().run(), 'Code block')}
+          {b('• List', !!look?.bulletList, () => chain().toggleBulletList().run(), 'Bulleted list')}
+          {b('1. List', !!look?.orderedList, () => chain().toggleOrderedList().run(), 'Numbered list')}
+          {b('☑ To do', !!look?.taskList, () => chain().toggleTaskList().run(), 'To do list')}
+          {b('❝', !!look?.blockquote, () => chain().toggleBlockquote().run(), 'Quote')}
+          {b('</>', !!look?.codeBlock, () => chain().toggleCodeBlock().run(), 'Code block')}
         </G>
         <G>
           {b('↶', false, onUndo, 'Undo (⌘Z)', hasPage)}

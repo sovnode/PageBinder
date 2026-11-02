@@ -17,6 +17,23 @@ Entry format:
 
 ---
 
+## 2026-11-01 · lead (macOS, Apple silicon) · main
+**Changed:** 1.2.4: the ribbon follows the caret (the user's report). Its font, size, and style controls now redraw whenever the look at the caret changes (`useEditorState` and `lookAt` in `Toolbar.tsx`). Before, they kept the look of the place before until something was typed.
+- A font or size the lists lack shows as it is. Before, a controlled `<select>` showed its first entry, so pasted 15 px Calibri showed as 14.
+- A pasted font named like a listed one (Outlook's `"Calibri",sans-serif`) shows as the listed entry.
+- The group wrapper `G` moved out of `Toolbar`, so redraws no longer replace the controls and lose clicks.
+- Details are in the 1.2.4 section of `DEVELOPMENT_PLAN.md`; the React and TipTap lessons are in `PLATFORM_NOTES.md` (Everywhere).
+
+**Found:** Moving the caret fires no `update` and leaves the active editor unchanged, so nothing redrew the ribbon. An independent review found two gaps in the first version's test, now closed: a click back into a box at the very spot of its caret, and Outlook's way of writing Calibri.
+
+**Checked:** Mac: type check, 104 unit tests, and every end-to-end suite.
+- Phase 3's new step 8 fails on the 1.2.3 toolbar, without the extra list entries, without the match by name, and with a selector that reads the snapshot's editor. The phase 3 zoom check fails while `G` is made inside `Toolbar`.
+- Of three full runs, one failed once: phase 8's table step timed out waiting for Shift+Home to select "One". Phase 8 then passed eight times on its own and in the next full run. One-off full-run failures at other steps were already seen on 27 October.
+
+**Next platform must check:** Windows, once 1.2.4 is built: click between differently formatted words in one text box and in another box. The font, size, B, I, and U should change to match each time.
+
+**Open:** The user's test by hand before pushing.
+
 ## 2026-10-31 · lead (macOS, Apple silicon) · main
 **Changed:** After the user tested 1.2.3, at their request (confirmed when asked), v1.2.3 was made the Latest full release and v1.2.0, v1.2.1, and v1.2.2 were turned into drafts with their notes, installers, and tags kept. v1.2.3 is now the only public release. At the user's choice its notes and attached revision log were left unchanged.
 - The README's top link reads "Download PageBinder 1.2.3" and still opens the latest release. `CLAUDE.md` (Published releases) now says to change that number whenever another version becomes Latest.
@@ -197,10 +214,3 @@ If suggestions appear by hand, find a way for the automated run to see them too 
 **Checked:** Type check; 78 unit tests (new: float layout); phase 8's rewritten picture step (placed at the click, three or more lines beside it, corner resize keeps shape, box resize keeps its size, drag lands exactly, moves with the box, same spot in page.html, copied to another page with its file, Delete) and every other suite. Waiting for the user's hands-on test before pushing.
 **Next platform must check:** After approval: Windows, insert and drag a picture in a text box and compare with Print Preview.
 **Open:** Text flows down one side of a picture only.
-
-## 2026-09-28 · lead (macOS, Apple silicon) · main
-**Changed:** New rule: once a version is released, development moves to the next number immediately. The version is now 1.1.2 (in development); the revision log and development plan sections for pictures in text are headed 1.1.2.
-**Found:** Nothing new.
-**Checked:** Version fields in `package.json` and `package-lock.json`.
-**Next platform must check:** Nothing.
-**Open:** Unchanged.

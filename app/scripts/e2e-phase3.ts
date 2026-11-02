@@ -10,7 +10,7 @@ import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createNotebook } from '../src/main/storage/notebook'
 import { createSection } from '../src/main/storage/section'
-import { createPage } from '../src/main/storage/page'
+import { createPage, savePage } from '../src/main/storage/page'
 import type { PageDoc } from '../src/shared/types'
 
 async function newBox(page: Page, x: number, y: number): Promise<void> {
@@ -34,6 +34,20 @@ async function main(): Promise<void> {
   const root = await createNotebook(base, 'Phase 3 notebook')
   const sec = await createSection(root, '', 'Files', '#1D9E75')
   const rel = (await createPage(root, sec, 'Attachments')).relPath
+  // A page of text in several looks, for the ribbon following the caret (step 8). The second
+  // paragraph has a font and a size the ribbon's lists lack, as text pasted from elsewhere can; the
+  // third has Calibri written the way Outlook writes it.
+  const ribbonPage = await createPage(root, sec, 'Ribbon')
+  const run = (text: string, marks: object[] = []): object => ({ type: 'text', text, ...(marks.length ? { marks } : {}) })
+  const look = (fontFamily: string, fontSize: string): object => ({ type: 'textStyle', attrs: { fontFamily, fontSize } })
+  const para = (...content: object[]): object => ({ type: 'paragraph', content })
+  await savePage(root, ribbonPage.relPath, {
+    ...ribbonPage.doc,
+    objects: [
+      { kind: 'text', id: 'ribbon-a', x: 96, y: 200, width: 560, content: { type: 'doc', content: [para(run('Calibri fifteen bold', [{ type: 'bold' }, look('Calibri, "Segoe UI", sans-serif', '15px')]), run(' then plain words '), run('Georgia eighteen italic', [{ type: 'italic' }, look('Georgia, serif', '18px')])), para(run('Pasted in another font', [look('Aptos, sans-serif', '11pt')])), para(run('Outlook wrote this Calibri', [look('"Calibri",sans-serif', '14px')]))] } },
+      { kind: 'text', id: 'ribbon-b', x: 96, y: 420, width: 560, content: { type: 'doc', content: [para(run('Courier twelve underlined', [{ type: 'underline' }, look('"Courier New", Courier, monospace', '12px')]))] } }
+    ]
+  })
   const shots = process.env['E2E_SHOTS'] ?? base
   await fs.mkdir(shots, { recursive: true })
   const step = (s: string): void => {
@@ -383,6 +397,77 @@ async function main(): Promise<void> {
   const missingCards = await page.locator('.file-card.missing').count()
   assert(remaining >= 1 && (missingCards === 1 || (await page.locator('.file-card', { hasText: 'Ridge Road quote' }).count()) === 1), 'page reopens with the missing file flagged')
   step('a missing attachment is flagged on reopen without affecting the rest of the page')
+
+  // 8. The ribbon shows the look of the text at the caret wherever the caret goes: clicked or moved
+  // with the keyboard, in the same text box or another (the user's report, 2026-11-01: the font,
+  // size, and bold kept showing the place before). A font or size its lists lack shows as it is.
+  await page.locator('.page-row', { hasText: 'Ribbon' }).click()
+  await page.waitForSelector('.text-container[data-object-id="ribbon-b"] .tiptap')
+  const ribbon = (): Promise<string> =>
+    page.evaluate(() => {
+      const font = document.querySelector('.tb-select.font') as HTMLSelectElement
+      const size = document.querySelector('.tb-select.size') as HTMLSelectElement
+      const on = ['bold', 'italic', 'underline'].filter((c) => document.querySelector(`.tb.${c}`)?.classList.contains('active'))
+      return [font.selectedOptions[0]?.textContent ?? '(none)', size.selectedOptions[0]?.textContent ?? '(none)', ...on].join(' / ')
+    })
+  const expectRibbon = async (want: string, where: string): Promise<void> => {
+    let got = await ribbon()
+    for (let i = 0; i < 20 && got !== want; i++) {
+      await page.waitForTimeout(50)
+      got = await ribbon()
+    }
+    assert(got === want, `the ribbon shows ${want} ${where} (it shows ${got})`)
+  }
+  // Click in the middle of a word on the canvas, scrolled into view first.
+  const clickWord = async (word: string): Promise<void> => {
+    const at = await page.evaluate((w) => {
+      const walker = document.createTreeWalker(document.querySelector('.canvas')!, NodeFilter.SHOW_TEXT)
+      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+        const i = n.textContent!.indexOf(w)
+        if (i < 0) continue
+        n.parentElement!.scrollIntoView({ block: 'center' })
+        const range = document.createRange()
+        range.setStart(n, i)
+        range.setEnd(n, i + w.length)
+        const r = range.getBoundingClientRect()
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 }
+      }
+      return null
+    }, word)
+    assert(at, `"${word}" is on the page`)
+    await page.mouse.click(at.x, at.y)
+  }
+  const optionCounts = (): Promise<string> => page.evaluate(() => `${document.querySelectorAll('.tb-select.font option').length} fonts, ${document.querySelectorAll('.tb-select.size option').length} sizes`)
+  await clickWord('eighteen')
+  await expectRibbon('Georgia / 18 / italic', 'after a click in "Georgia eighteen italic"')
+  const listed = await optionCounts()
+  await page.evaluate(() => ((window as unknown as Record<string, unknown>)['__fontList'] = document.querySelector('.tb-select.font')))
+  await clickWord('fifteen')
+  await expectRibbon('Calibri / 15 / bold', 'after a click in "Calibri fifteen bold" in the same text box')
+  // The ribbon redraws as the caret moves, keeping its controls: a control replaced while it is
+  // pressed loses the click (the zoom reset in step 6c) or the list it was opening.
+  assert(await page.evaluate(() => document.querySelector('.tb-select.font') === (window as unknown as Record<string, unknown>)['__fontList']), 'the font list is the same element after the ribbon redraws')
+  await page.keyboard.press('ArrowDown')
+  await expectRibbon('Aptos / 11pt', 'after the Down arrow moves the caret into text in a font and size the lists lack')
+  await clickWord('Outlook')
+  await expectRibbon('Calibri / 14', 'in Calibri written as Outlook writes it')
+  assert((await optionCounts()) === listed, `a pasted font named like a listed one shows as that entry, not as a second one (${await optionCounts()}, not ${listed})`)
+  await clickWord('plain')
+  await expectRibbon('System / 14', 'after a click in plain text')
+  await page.locator('.tb.bold').click()
+  await expectRibbon('System / 14 / bold', 'after Bold is pressed with nothing highlighted')
+  await page.locator('.tb.bold').click()
+  await expectRibbon('System / 14', 'after Bold is pressed again')
+  await clickWord('Courier')
+  await expectRibbon('Courier New / 12 / underline', 'after a click in another text box')
+  await clickWord('eighteen')
+  await expectRibbon('Georgia / 18 / italic', 'after a click back in the first text box, away from where its caret was')
+  assert((await optionCounts()) === listed, `the lists drop the font and size they lacked once the caret leaves that text (${await optionCounts()}, not ${listed})`)
+  // Back into the second box at the very spot its caret already was: the click moves no caret, so
+  // only the focus tells the ribbon which box it is in now.
+  await clickWord('Courier')
+  await expectRibbon('Courier New / 12 / underline', 'after a click back in the second text box where its caret already was')
+  step('the ribbon shows the font, size, and style at the caret wherever it goes, including ones its lists lack')
 
   await app.close()
   process.stdout.write(`\nPASS. Notebook kept at ${root}\n`)

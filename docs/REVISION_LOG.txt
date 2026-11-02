@@ -10,6 +10,14 @@ versions before it. Nothing ever needs converting.
 Version 1.2.4 - in development (not yet released)
 -------------------------------------------------
 
+- The font, size, and style buttons at the top now follow the cursor. They
+  show the look of the text where the cursor is, wherever it is clicked or
+  moved with the keyboard. Before, they could keep showing the look of the
+  place before until something was typed.
+- A font or size the lists do not offer, such as text pasted from an email
+  in 15-point Calibri, is shown as it is, instead of as size 14 or the
+  System font.
+
 
 Version 1.2.3 - 31 October 2026
 -------------------------------

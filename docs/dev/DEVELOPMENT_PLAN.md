@@ -193,6 +193,19 @@ Published as a pre-release on 30 September 2026.
 
 ## Version 1.2.4 (in development)
 
+- **The ribbon follows the caret** (the user's report, 2026-11-01). The font, size, and style controls read the active editor's attributes while `Toolbar` rendered, but nothing redrew `Toolbar` when only the caret moved. A selection change fires no `update`, and the active editor stays the same. So the ribbon kept the look of the place before until something was typed or another text box took focus, and even then it could show that box's earlier caret position. `Toolbar` now uses TipTap's `useEditorState`, so it redraws whenever the look at the caret changes (`lookAt` in `Toolbar.tsx`): after a click, an arrow key, Bold pressed with nothing highlighted, or a move to another box. Its selector reads the current editor rather than the snapshot's: the snapshot keeps the previous editor until the next transaction after another box becomes active.
+- **Fonts and sizes the lists lack show as they are.** A controlled `<select>` whose value matches no option shows its first entry, so 15 px Calibri pasted from Outlook showed as 14, and an unlisted font showed as System. While the caret is in such text, its size joins the size list in order, and its font joins the end of the font list under its first name (`fontName`). A font named like a listed one shows as that entry instead: Outlook writes Calibri as `"Calibri",sans-serif`, which would otherwise have put a second Calibri in the list. Nothing stored changes.
+- **Ribbon controls keep their elements.** The group wrapper `G` was a component made inside `Toolbar`, so React replaced every control whenever the ribbon was drawn again. Now that the ribbon also redraws as a text box loses focus, a press on a control that takes the focus (the zoom reset in phase 3) landed on an element that was gone by the button's release, and the click was lost. `G` now lives outside `Toolbar`.
+- **Checks.** Phase 3's step 8 opens a page with styled text and checks the font, size, and style the ribbon shows at each stage:
+  - after a click into a box;
+  - after a click elsewhere in the same box, and after the Down arrow into text in an unlisted font and size (Aptos, 11 pt);
+  - in Calibri written as Outlook writes it, which shows as the listed Calibri;
+  - in plain text, and with Bold pressed twice with nothing highlighted;
+  - in another box, back in the first box away from its earlier caret, and back in the second box at the very spot of its caret (a click that moves no caret, so only the change of box tells the ribbon);
+  - also that the font list is the same element after a redraw, and that the extra entries go once the caret leaves.
+
+  The step fails on the 1.2.3 toolbar ("Calibri / 14 / bold" after a click into Georgia 18 italic), without the extra list entries, without the match by name, and with a selector that reads the snapshot's editor. The phase 3 zoom check fails while `G` is made inside `Toolbar`. An independent review of the change found the last two gaps.
+
 ## Version 1.2.3
 
 Published as a pre-release on 31 October 2026 from commit `600a19c`, at the user's request. After the user tested it, it was made the Latest full release the same day, and 1.2.0 to 1.2.2 were turned into drafts, so 1.2.3 is the only public release. The README's download link now reads "Download PageBinder 1.2.3".

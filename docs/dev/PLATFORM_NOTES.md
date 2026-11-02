@@ -34,6 +34,8 @@ What each platform has taught us, so the next machine does not relearn it. Add t
   - When the window becomes active again, Chromium sends `focus` to the window and then to the focused element, which React reports as `onFocus`. Do not scroll on every focus.
   - Chromium focuses a button on mouse down. Anything that scrolls on focus moves the button before mouse up, so the click can land on another element.
   - An element reaching 1 px past a scroll container (a negative margin) makes it scroll by that pixel, and shows a scroll bar wherever scroll bars are always shown (Windows, and Macs set that way).
+- **React components made inside a render** (found with the ribbon, 1.2.4): a component defined inside another component's body is a new type on every render, so React throws away its elements and makes new ones each time. A press on such a control just before a redraw loses its click, because the element is replaced between mouse down and mouse up. Define wrapper components at module level.
+- **TipTap's `useEditorState`** redraws on every transaction of the editor it watches, but its snapshot keeps the previous editor until the newly watched one has its first transaction. When the watched editor changes (another text box takes focus), read the editor passed in, not `snapshot.editor`.
 - **Timing.** Tests must wait for a condition, not for a fixed delay. The crash test and a restored-title check failed on slow machines until they did.
 - **Linux (cloud sessions and CI):** window suites need a display, so run them with `xvfb-run -a npm run e2e`.
 - **Every npm and npx command runs inside `app/`.** The repository root holds only the README, the licence, `CLAUDE.md`, and the `docs/` folder.
