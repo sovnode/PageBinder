@@ -17,6 +17,26 @@ Entry format:
 
 ---
 
+## 2026-11-02 · platform (Windows x64) · fix/windows-defender-asr
+**Changed:** Documentation only, one commit: this note, and a "Managed PCs" entry under Windows in `PLATFORM_NOTES.md`. No program files changed.
+
+**Found:** On a company-managed Windows 11 PC, Microsoft Defender's attack surface reduction (ASR) rule "Block executable files from running unless they meet a prevalence, age, or trusted list criterion" (rule `01443614-cd74-433a-b99e-2ecdc07bfc25`) is enforced by the organisation and blocks PageBinder at every step, because the program is unsigned and installed on too few machines to be known. It cannot be turned off or excluded locally; the "Unblock" button in the dialog allows one file once, and the next file or version is blocked again. The Defender log (`Microsoft-Windows-Windows Defender/Operational`, event 1121 blocked, 1129 allowed by the user) shows, for 1.2.1 installed per machine in `C:\Program Files\PageBinder`:
+- `PageBinder-Setup-1.2.1.exe` in Downloads and `installer.exe` under `%LOCALAPPDATA%\pagebinder-updater` were blocked, so neither a downloaded installer nor the built-in updater can run without an "Unblock" each time.
+- `PageBinder.exe` itself was blocked on launch until allowed once, and then logged as blocked again several times a day while it ran, each time from another program reaching into it: Explorer, PowerShell, the Logitech and 3Dconnexion device agents, the Windows touch keyboard (`TabTip.exe`), and the company's inventory agents. Each of these showed the user the same "This content is blocked" dialog while they were working in PageBinder.
+- The NSIS uninstaller was the worst case. It copies itself to `%LOCALAPPDATA%\Temp\~nsuA.tmp\Un_A.exe` and runs the copy; when the copy was blocked it tried again under a new name, `Un_B.exe` to `Un_Z.exe`, every three to four seconds, 26 dialogs in about ninety seconds, and never uninstalled anything. The leftover was removed by hand: the program folder, the `Uninstall` registry key, and the Temp folder (which NSIS leaves with an access list only administrators can delete).
+
+**Checked:** Read only: the Defender log, Apps and Features, the registry Run keys and scheduled tasks, and the program folder. Nothing from npm ran here (no Node on this machine), and no program file changed, so no type check or tests.
+
+**Next platform must check:** nothing. The 2026-11-01 request to check the ribbon on Windows with 1.2.4 is still waiting: 1.2.4 cannot be installed on this PC until the organisation excludes it (see Open).
+
+**Open:** For the user and the lead to decide, in rough order of value:
+1. Ask the IT department for an ASR-only exclusion for PageBinder's install folder (and `%LOCALAPPDATA%\pagebinder-updater`), or an allow indicator for the file. Until then, every new build is blocked on this PC.
+2. Drop the NSIS target, or at least its uninstaller's retry loop, on Windows. A portable build or a plain unpacked folder spawns no second executable from Temp, which is the one thing this rule always catches. MSIX would also avoid it but needs signing.
+3. Code signing. A certificate from a public CA, or the organisation's own CA for internal use, satisfies the rule's "trusted list" and lets the organisation allow the publisher once rather than every build. `electron-builder.yml` already notes there is no certificate.
+4. Let the user turn the built-in updater off, or make it download only and leave the install to them, since its silent run is blocked anyway.
+Each of these changes shared build configuration, so it is for the lead, after the user chooses.
+
+
 ## 2026-11-01 · lead (macOS, Apple silicon) · main
 **Changed:** After the user tested the ribbon fix, v1.2.4 was published from `abd9905` as the Latest full release. v1.2.3 was turned into a draft (confirmed when asked), so v1.2.4 is the only public release. Development moved on to 1.2.5.
 - The user first asked for a pre-release. GitHub's `releases/latest`, which the README's links use, finds no pre-release, so the user chose a full release instead (`DECISIONS.md`).
