@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sovnode/PageBinder/releases/latest"><b>Download PageBinder 1.2.4</b></a>
+  <a href="https://github.com/sovnode/PageBinder/releases/latest"><b>Download PageBinder 1.2.5</b></a>
 </p>
 
 ![A PageBinder notebook open on a page of survey notes, with section tabs across the top and the page list on the right](docs/images/pagebinder.png)

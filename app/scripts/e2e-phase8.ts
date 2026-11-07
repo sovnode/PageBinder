@@ -5,6 +5,7 @@
  */
 import { _electron as electron, type Page } from 'playwright'
 import { useApp, saveViaMenu } from './e2e-save'
+import { waitForNewTable } from './e2e-editor'
 import { promises as fs } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -30,7 +31,7 @@ async function newBox(page: Page, x: number, y: number): Promise<void> {
 async function newTable(page: Page, x: number, y: number): Promise<void> {
   await page.locator('.canvas').click({ button: 'right', position: { x, y } })
   await page.locator('.context-item', { hasText: 'Table (3' }).click()
-  await page.waitForSelector('.tiptap table td')
+  await waitForNewTable(page)
 }
 
 async function main(): Promise<void> {

@@ -17,6 +17,26 @@ Entry format:
 
 ---
 
+## 2026-11-07 · lead (macOS, Apple silicon) · main
+**Changed:** 1.2.5 was built, tested by the user, and published from `58077d3` as the Latest full release (`797dd43..58077d3`, then this commit). At the user's choice, confirmed when asked, v1.2.4 is now a draft, so v1.2.5 is the only public release. Development moved to 1.2.6.
+- **Tabs in alphabetical order** (the user's request): sections and section groups form one A to Z list at every level, in every notebook, with no setting to go back. Pages keep their own order. The folder scan, the index (`INDEX_VERSION` 6), exports, and template lists all sort with `app/src/main/storage/arrange.ts`. `order` and `pageOrder` are still written as before, so 1.2.4 shows what it always did.
+- **Mark inactive / Mark active** on the right-click menu of a section tab, a group tab, and a page (also several selected pages at once): the item turns grey and moves to the end of its list. It still opens, prints, exports, and is searched as before. Opening a notebook or group opens the first active section. The marks are optional fields: `inactive` in section.json and group.json, and `inactivePages` (page IDs) in section.json. Both are removed when empty, and page files are never touched. 1.2.4 keeps them when it saves (unit-tested).
+- **Restoring a section or group from Recycled Pages opens it.** Before, nothing opened. A page whose section is gone now asks for a section first.
+- The README's link reads "Download PageBinder 1.2.5". `app/package.json` is 1.2.6, and the revision log has a 1.2.6 section.
+- Tests: `waitForNewTable` in the new `app/scripts/e2e-editor.ts` is used by phases 2, 3, and 8 wherever a test types into a table it has just inserted. The program is unchanged.
+
+**Found:** GitHub's first Windows run of `58077d3` failed once: phase 8's Shift+Home in a new table selected nothing (`e2e-phase8.ts:146`, also seen once on the Mac on 2026-11-02). It was a race in the test, not a program bug; the investigation is recorded in `PLATFORM_NOTES.md`. A new table's editor finishes taking focus 20 to 50 ms after it appears: TipTap's autofocus timer and frame, then ProseMirror's 20 ms post-focus check. Keys sent in that moment can be typed out of order or have their selection put back. Reproduced on the Mac with a scratch script (not committed): 18 of 20 quick rounds went wrong without the wait, 0 of 40 with it, and 0 of 40 at natural speed with the processor slowed. The 1.2.4 ribbon change only reads the editor and adds no such path.
+
+**Checked:**
+- Mac, for the 1.2.5 features: type check, 114 unit tests, all 11 end-to-end suites, and `scripts/cross-platform.ts` make/check. Two review passes found three problems, each fixed and covered by a test that fails without it. The user tested the features by hand in the running app.
+- GitHub on `58077d3`: the first attempt failed only in Windows Tests (the race above). The re-run passed all six jobs, including notebooks made on each system opening in the other's installed app. The release build passed.
+- After publishing, without signing in: the releases API lists only v1.2.5, `releases/latest` opens it, its four files download, and v1.2.4's installer returns 404. The v1.2.4 draft keeps its tag and four files.
+- Mac, after the test change: type check, 114 unit tests, and phases 2, 3, and 8 passed once each.
+
+**Next platform must check:** Windows: install `PageBinder-Setup-1.2.5.exe` and open a notebook made with 1.2.4. Check that the tabs are A to Z, and mark a section, a group, and a page inactive and active again; each should turn grey and move to the end, then back. Delete a section and restore it from File > Recycled Pages; it should open. GitHub's Windows run on this push should pass phases 2, 3, and 8.
+
+**Open:** Making GitHub's Windows run see spelling suggestions is still open (2026-10-31 entry).
+
 ## 2026-11-01 · lead (macOS, Apple silicon) · main
 **Changed:** After the user tested the ribbon fix, v1.2.4 was published from `abd9905` as the Latest full release. v1.2.3 was turned into a draft (confirmed when asked), so v1.2.4 is the only public release. Development moved on to 1.2.5.
 - The user first asked for a pre-release. GitHub's `releases/latest`, which the README's links use, finds no pre-release, so the user chose a full release instead (`DECISIONS.md`).
@@ -217,10 +237,3 @@ If suggestions appear by hand, find a way for the automated run to see them too 
 **Checked:** Type check; 92 unit tests; every end-to-end suite on this Mac. The user tried each feature in the running app.
 **Next platform must check:** Windows: install PageBinder-Setup-1.1.2.exe; drag an Outlook email onto a page and search for a word from its body (the HTML/RTF fix has only unit tests); check Notebook Properties shows the Windows account name; open a page.html backup in a browser (whole canvas) and print it (sheets only); cut a picture on the page and paste it into a text box.
 **Open:** Nothing.
-
-## 2026-09-29 · lead (macOS, Apple silicon) · main
-**Changed:** Since the last note: pictures in text boxes resize from any corner and also arrive by drop, paste, or Insert > Picture while the cursor is in a box; four alignment buttons with drawn symbols (Justify added, no selected highlight); a click outside a text box clears its highlight; heading buttons and shortcuts removed (the heading node stays for existing pages; `@tiptap/extension-heading` is now a direct dependency). At the user's explicit, confirmed request the published v1.1.1 pre-release was deleted and rebuilt from this code as 1.1.1, with the 1.1.1 and 1.1.2 revision-log sections merged; the version then moves to 1.1.2.
-**Found:** A copy of the old 1.1.1 (28 September build) may exist on some machines under the same number. It does not know pictures in text boxes: do not edit such pages with it.
-**Checked:** Type check; unit tests; every end-to-end suite after the highlight fix. The heading removal was checked by the user in the running app; its phase 2 test change has not been run yet.
-**Next platform must check:** Windows: install the new PageBinder-Setup-1.1.1.exe; check the alignment buttons, that no heading buttons show, and that a page with pictures in a text box prints as shown.
-**Open:** Nothing. Afterwards the phase 8 picture step failed on the GitHub macOS runner only: its smaller screen left the text box's move bar under the toolbar, so the drag missed it. The test now hovers the bar into view, checks it is uncovered, and measures the picture relative to the box (commits `109bbfc`, `23f30a4`). CI passes on macOS and Windows, and phase 2 passes locally with the heading change.

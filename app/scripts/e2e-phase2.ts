@@ -5,6 +5,7 @@
  */
 import { _electron as electron, type Page, type ElectronApplication } from 'playwright'
 import { useApp, saveViaMenu } from './e2e-save'
+import { waitForNewTable } from './e2e-editor'
 import { promises as fs } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -102,7 +103,7 @@ async function main(): Promise<void> {
   // Tables are inserted from the canvas right-click menu, as their own box.
   await page.locator('.canvas').click({ button: 'right', position: { x: 120, y: 420 } })
   await page.locator('.context-item', { hasText: 'Table (3' }).click()
-  await page.waitForSelector('.tiptap table td')
+  await waitForNewTable(page)
   await page.locator('.tiptap table td').first().click()
   await page.keyboard.type('Pass')
   await page.keyboard.press('Tab')
