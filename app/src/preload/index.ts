@@ -130,7 +130,8 @@ const api = {
       invoke('section:create', containerRel, name, color),
     createGroup: (containerRel: string, name: string) => invoke('section:createGroup', containerRel, name),
     rename: (rel: string, name: string) => invoke('section:rename', rel, name),
-    setColor: (rel: string, color: string) => invoke('section:setColor', rel, color)
+    setColor: (rel: string, color: string) => invoke('section:setColor', rel, color),
+    setInactive: (rel: string, inactive: boolean) => invoke('section:setInactive', rel, inactive)
   },
   page: {
     create: (sectionRel: string, title?: string, opts?: { titleBlock?: boolean }) => invoke('page:create', sectionRel, title, opts),
@@ -151,7 +152,8 @@ const api = {
     pickFiles: (rel: string) => invoke('page:pickFiles', rel),
     copyFilesBetween: (fromRel: string, toRel: string, items: { sub: 'images' | 'attachments'; name: string; originalName?: string }[], fromRoot?: string) => invoke('page:copyFilesBetween', fromRel, toRel, items, fromRoot),
     readAttachment: (rel: string, sub: 'images' | 'attachments', name: string) => invoke('page:readAttachment', rel, sub, name),
-    delete: (rel: string) => invoke('page:delete', rel)
+    delete: (rel: string) => invoke('page:delete', rel),
+    setInactive: (sectionRel: string, pageIds: string[], inactive: boolean) => invoke('page:setInactive', sectionRel, pageIds, inactive)
   },
   onMenu: (channel: string, handler: () => void) => {
     const listener = (): void => handler()

@@ -52,7 +52,8 @@ export function PageList({
   onCutPages,
   cutRels,
   onPastePage,
-  copiedPageTitle
+  copiedPageTitle,
+  onSetInactive
 }: {
   section: SectionNode | undefined
   activeRel: string | null
@@ -78,6 +79,8 @@ export function PageList({
   cutRels: Set<string> | null
   onPastePage: () => void
   copiedPageTitle: string | null
+  /** Mark pages inactive (grey, at the end of the list) or active again. */
+  onSetInactive: (pages: PageRef[], inactive: boolean) => void
 }): JSX.Element {
   const [menu, setMenu] = useState<{ x: number; y: number; page: PageRef } | null>(null)
   const [addMenu, setAddMenu] = useState<{ x: number; y: number } | null>(null)
@@ -163,9 +166,9 @@ export function PageList({
             <button
               key={p.relPath}
               type="button"
-              className={`page-row${p.relPath === activeRel ? ' on' : ''}${selected.has(p.relPath) && (selected.size > 1 || p.relPath !== activeRel) ? ' selected' : ''}${cutRels?.has(p.relPath) ? ' cut' : ''}${p.parentPageId && parents.has(p.parentPageId) ? ' sub' : ''}`}
+              className={`page-row${p.relPath === activeRel ? ' on' : ''}${selected.has(p.relPath) && (selected.size > 1 || p.relPath !== activeRel) ? ' selected' : ''}${cutRels?.has(p.relPath) ? ' cut' : ''}${p.parentPageId && parents.has(p.parentPageId) ? ' sub' : ''}${p.inactive ? ' inactive' : ''}`}
               style={p.relPath === activeRel ? { borderLeftColor: section?.color } : undefined}
-              title={`Last edited ${formatDateTime(p.modified)}. Ctrl-click (Cmd-click on a Mac) or Shift-click to select several.`}
+              title={`${p.inactive ? 'Inactive (right-click to mark it active). ' : ''}Last edited ${formatDateTime(p.modified)}. Ctrl-click (Cmd-click on a Mac) or Shift-click to select several.`}
               onClick={(e) => choose(e, p.relPath)}
               onDoubleClick={(e) => {
                 if (!e.shiftKey && !e.metaKey && !e.ctrlKey) onStartRename(p.relPath)
@@ -201,9 +204,13 @@ export function PageList({
             const group = selectedPages(menu.page)
             const noun = templateMode ? 'templates' : 'pages'
             if (group.length > 1) {
+              const someActive = group.some((p) => !p.inactive)
+              const someInactive = group.some((p) => p.inactive)
               return [
                 { label: `Cut ${group.length} ${noun}`, onClick: () => onCutPages(group) },
                 { label: `Copy ${group.length} ${noun}`, onClick: () => onCopyPages(group) },
+                ...(someActive ? [{ label: `Mark ${group.length} ${noun} inactive`, onClick: () => onSetInactive(group, true) }] : []),
+                ...(someInactive ? [{ label: `Mark ${group.length} ${noun} active`, onClick: () => onSetInactive(group, false) }] : []),
                 { separator: true },
                 { label: `Delete ${group.length} ${noun}`, onClick: () => onDeletePages(group) }
               ]
@@ -211,6 +218,7 @@ export function PageList({
             return [
               { label: 'Rename…', onClick: () => onStartRename(menu.page.relPath) },
               { label: 'Page history…', onClick: () => onHistory(menu.page.relPath) },
+              { label: menu.page.inactive ? 'Mark active' : 'Mark inactive', onClick: () => onSetInactive([menu.page], !menu.page.inactive) },
               { separator: true },
               { label: templateMode ? 'Cut template' : 'Cut page', onClick: () => onCutPages([menu.page]) },
               { label: templateMode ? 'Copy template' : 'Copy page', onClick: () => onCopyPages([menu.page]) },

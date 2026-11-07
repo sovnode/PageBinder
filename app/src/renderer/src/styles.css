@@ -87,6 +87,9 @@ input { font: inherit; color: inherit; }
 .tab.on { background: var(--surface); color: var(--text); font-weight: 600; }
 .tab.group { color: #534ab7; }
 .tab.add { color: var(--muted); border-top-color: var(--border); min-width: 34px; }
+/* Marked inactive (1.2.5): grey, at the end of the tabs. The top border is grey too (set inline). */
+.tab.inactive { background: #ecebe7; color: var(--muted); }
+.tab.inactive.on { background: var(--surface); color: var(--muted); }
 /* The + sticks to the strip's right edge, covering the tabs that scroll beneath it. Its holder carries
    the strip's right padding (a sticky box stops at a scroll container's padding), so the + sits in the
    same place whether or not it is stuck. */
@@ -113,6 +116,9 @@ input { font: inherit; color: inherit; }
 .page-row.on { background: var(--surface); color: var(--text); font-weight: 600; }
 .page-row.sub { padding-left: 28px; font-size: 12px; }
 .page-row.add { color: var(--muted); }
+/* Marked inactive (1.2.5): grey, at the end of the list. Not dimmed: dimming means cut. */
+.page-row.inactive { color: var(--muted); background: #f1f0ec; }
+.page-row.inactive.on { background: var(--surface); }
 .page-title-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .page-date { color: var(--muted); font-size: 10px; font-weight: 400; flex-shrink: 0; }
 

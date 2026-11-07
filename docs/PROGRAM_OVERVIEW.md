@@ -7,8 +7,9 @@ Everything stays on your own computer or your own network drive. PageBinder has 
 ## How notes are organised
 
 - A **notebook** holds everything on one subject. You can have as many notebooks as you like, anywhere on your disk.
-- Inside a notebook, **sections** are the coloured tabs across the top. Related sections can be gathered into a **section group**, which appears as a tab with a folder icon.
-- Each section holds **pages**, listed down the right-hand side.
+- Inside a notebook, **sections** are the coloured tabs across the top. Related sections can be gathered into a **section group**, which appears as a tab with a folder icon. Sections and section groups are shown in alphabetical order.
+- Each section holds **pages**, listed down the right-hand side, in the order they were added.
+- A section, section group, or page you no longer use can be marked **inactive**: right-click it and choose Mark inactive. It turns grey and moves to the end of its list, but still opens, prints, and turns up in searches as before. Choose Mark active to bring it back.
 
 A page is a blank canvas. Click anywhere to start a text box, and place text boxes, tables, pictures, shapes, and attached files wherever you want them. The page grows as far as you place things.
 

@@ -14,9 +14,10 @@ import { extractPageText } from './text'
 
 /**
  * 4: printout text column. 5: Outlook email bodies stored only as HTML or compressed RTF are
- * indexed. A version change makes every notebook rebuild its index on open.
+ * indexed. 6: sections and groups marked inactive, and the inactive pages of each section; tabs in
+ * alphabetical order. A version change makes every notebook rebuild its index on open.
  */
-export const INDEX_VERSION = 5
+export const INDEX_VERSION = 6
 export const INDEX_FILE = 'search.sqlite'
 
 export type ResultKind = 'page' | 'section' | 'group'
@@ -63,6 +64,10 @@ export interface ContainerRow {
   parentRel: string
   sort: number
   defaultTemplate: string | null
+  /** 1 when the section or group is marked inactive. */
+  inactive: number
+  /** A section's inactive pages: a JSON list of page IDs, or null. */
+  inactivePages: string | null
 }
 
 const SCHEMA = `
@@ -72,7 +77,8 @@ create table if not exists pages (
   sort integer default 0, parent_page_id text
 );
 create table if not exists containers (
-  rel text primary key, kind text, name text, color text, parent_rel text, sort integer default 0, default_template text
+  rel text primary key, kind text, name text, color text, parent_rel text, sort integer default 0, default_template text,
+  inactive integer default 0, inactive_pages text
 );
 create index if not exists pages_section on pages(section_rel);
 create index if not exists containers_parent on containers(parent_rel);
@@ -170,14 +176,14 @@ export class SearchIndex {
       pageRowidsUnder: db.prepare('select rowid as id from pages where section_rel = ? or section_rel like ?'),
       containerRowidsUnder: db.prepare('select rowid as id from containers where rel = ? or rel like ?'),
       upsertContainer: db.prepare(
-        'insert into containers (rel, kind, name, color, parent_rel, sort, default_template) values (?, ?, ?, ?, ?, ?, ?) on conflict(rel) do update set kind = excluded.kind, name = excluded.name, color = excluded.color, parent_rel = excluded.parent_rel, sort = excluded.sort, default_template = excluded.default_template'
+        'insert into containers (rel, kind, name, color, parent_rel, sort, default_template, inactive, inactive_pages) values (?, ?, ?, ?, ?, ?, ?, ?, ?) on conflict(rel) do update set kind = excluded.kind, name = excluded.name, color = excluded.color, parent_rel = excluded.parent_rel, sort = excluded.sort, default_template = excluded.default_template, inactive = excluded.inactive, inactive_pages = excluded.inactive_pages'
       ),
       deleteContainer: db.prepare('delete from containers where rel = ?'),
-      getContainer: db.prepare('select rel, kind, name, color, parent_rel as parentRel, sort, default_template as defaultTemplate from containers where rel = ?'),
+      getContainer: db.prepare('select rel, kind, name, color, parent_rel as parentRel, sort, default_template as defaultTemplate, inactive, inactive_pages as inactivePages from containers where rel = ?'),
       containersUnder: db.prepare('select rel from containers where rel = ? or rel like ?'),
       pagesUnder: db.prepare('select rel from pages where section_rel = ? or section_rel like ?'),
       allPages: db.prepare('select rel, id, title, section, section_rel as sectionRel, mtime, modified, sort, parent_page_id as parentPageId from pages'),
-      allContainers: db.prepare('select rel, kind, name, color, parent_rel as parentRel, sort, default_template as defaultTemplate from containers'),
+      allContainers: db.prepare('select rel, kind, name, color, parent_rel as parentRel, sort, default_template as defaultTemplate, inactive, inactive_pages as inactivePages from containers'),
       pagesInSection: db.prepare('select rel, id, title, section, section_rel as sectionRel, mtime, modified, sort, parent_page_id as parentPageId from pages where section_rel = ? order by sort, title collate nocase'),
       count: db.prepare('select count(*) as n from pages'),
       countContainers: db.prepare('select count(*) as n from containers')
@@ -256,13 +262,23 @@ export class SearchIndex {
     return (this.stmts['countContainers']!.get() as { n: number }).n
   }
 
-  /** Sections and groups are searchable by name and hold their place in the tree. */
-  indexContainer(rel: string, kind: 'section' | 'group', name: string, extra: { color?: string | null; parentRel?: string; sort?: number; defaultTemplate?: string | null } = {}): void {
+  /**
+   * Sections and groups are searchable by name and hold their place in the tree. Anything `extra`
+   * leaves out keeps its earlier value.
+   */
+  indexContainer(
+    rel: string,
+    kind: 'section' | 'group',
+    name: string,
+    extra: { color?: string | null; parentRel?: string; sort?: number; defaultTemplate?: string | null; inactive?: boolean; inactivePages?: string[] | null } = {}
+  ): void {
     this.transaction(() => {
       const prev = this.getContainer(rel)
       this.deleteContainerText(rel)
       const parentRel = extra.parentRel ?? prev?.parentRel ?? (rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '')
-      this.stmts['upsertContainer']!.run(rel, kind, name, extra.color ?? prev?.color ?? null, parentRel, extra.sort ?? prev?.sort ?? 0, extra.defaultTemplate === undefined ? (prev?.defaultTemplate ?? null) : extra.defaultTemplate)
+      const inactive = extra.inactive === undefined ? (prev?.inactive ?? 0) : extra.inactive ? 1 : 0
+      const inactivePages = extra.inactivePages === undefined ? (prev?.inactivePages ?? null) : extra.inactivePages?.length ? JSON.stringify(extra.inactivePages) : null
+      this.stmts['upsertContainer']!.run(rel, kind, name, extra.color ?? prev?.color ?? null, parentRel, extra.sort ?? prev?.sort ?? 0, extra.defaultTemplate === undefined ? (prev?.defaultTemplate ?? null) : extra.defaultTemplate, inactive, inactivePages)
       const rowid = (this.stmts['containerRowid']!.get(rel) as { id: number }).id
       this.stmts['insertFts']!.run(-rowid, kind, rel, '', rel, name, '', '', '')
     })

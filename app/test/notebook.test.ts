@@ -41,7 +41,7 @@ describe('notebook structure', () => {
     expect(tree.children).toEqual([])
   })
 
-  it('builds the tree from groups, sections, and pages in order', async () => {
+  it('builds the tree: sections and groups A to Z, pages in their own order', async () => {
     const root = await createNotebook(dir, 'nb')
     const group = await createGroup(root, '', 'Site surveys')
     const s1 = await createSection(root, group, 'Ridge Road')
@@ -50,12 +50,12 @@ describe('notebook structure', () => {
     await createPage(root, s2, 'Survey plan')
     await createPage(root, s2, 'Lidar pass')
     const tree = await openNotebook(root)
-    expect(tree.children.map((c) => c.name)).toEqual(['Site surveys', 'Home'])
-    const g = tree.children[0]!
+    expect(tree.children.map((c) => c.name)).toEqual(['Home', 'Site surveys'])
+    const g = tree.children[1]!
     expect(g.kind).toBe('group')
     if (g.kind !== 'group') throw new Error()
-    expect(g.children.map((c) => c.name)).toEqual(['Ridge Road', 'North Field'])
-    const north = g.children[1]!
+    expect(g.children.map((c) => c.name)).toEqual(['North Field', 'Ridge Road'])
+    const north = g.children[0]!
     if (north.kind !== 'section') throw new Error()
     expect(north.color).toBe('#D85A30')
     expect(north.pages.map((p) => p.title)).toEqual(['Survey plan', 'Lidar pass'])

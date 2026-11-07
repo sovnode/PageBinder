@@ -88,7 +88,9 @@ async function main(): Promise<void> {
   }
 
   // 1. The Templates notebook opens from the start screen like any notebook. A picture copied on a
-  //    notebook page pastes into a template, its file copied across.
+  //    notebook page pastes into a template, its file copied across. (Tabs are A to Z, so the notebook
+  //    opens on Old default: open Work.)
+  await page.locator('.section-tabs .tab', { hasText: /^Work$/ }).click()
   await page.waitForSelector('.page-row.on:has-text("Visit form")')
   await page.locator('.canvas .image-object').first().click({ button: 'right' })
   await page.locator('.context-item', { hasText: /^Copy$/ }).click()
@@ -202,9 +204,11 @@ async function main(): Promise<void> {
   await page.locator('.page-list-head .icon').click()
   const headings = await page.locator('.context-menu .context-heading').allTextContents()
   const offered = await page.locator('.context-item').allTextContents()
-  assert(JSON.stringify(headings) === JSON.stringify(['General', 'Farm']), `templates are listed under their sections (${headings.join(', ')})`)
+  // Sections are listed as the tabs show them, A to Z (1.2.5).
+  assert(JSON.stringify(headings) === JSON.stringify(['Farm', 'General']), `templates are listed under their sections (${headings.join(', ')})`)
   assert(offered.filter((t) => t === 'From template: Visit form v2').length === 2 && !offered.some((t) => t.includes('Old form')), `both templates are offered and the old one is not (${offered.join(' | ')})`)
-  await page.locator('.context-item', { hasText: /^From template: Visit form v2$/ }).nth(1).click()
+  // The copy in Farm.
+  await page.locator('.context-item', { hasText: /^From template: Visit form v2$/ }).nth(0).click()
   // The page is named after its first line of text, placeholder filled, with no naming step.
   const activeName = async (): Promise<string> => (await page.locator('.page-row.on .page-title-text').textContent()) ?? ''
   await page.waitForFunction(() => (document.querySelector('.page-row.on .page-title-text')?.textContent ?? '').startsWith('Original template text plus an edit made '))

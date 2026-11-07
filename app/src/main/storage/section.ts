@@ -1,5 +1,5 @@
 /**
- * Sections and section groups: create, rename, recolor, reorder.
+ * Sections and section groups: create, rename, recolor, reorder, mark inactive.
  */
 import { promises as fs } from 'node:fs'
 import { join, dirname, basename } from 'node:path'
@@ -94,6 +94,41 @@ export async function setSectionColor(root: string, rel: string, color: string):
   const meta = await readJson<SectionMeta>(path)
   if (!meta) throw new Error(`Not a section: ${rel}`)
   await writeJson(path, { ...meta, color })
+}
+
+/**
+ * Mark a section or group inactive (shown grey, after the active tabs) or active again. The mark is
+ * an optional field of its own section.json or group.json, removed again when it is made active, so
+ * the file reads as before. 1.2.4 keeps the field when it rewrites the file.
+ */
+export async function setContainerInactive(root: string, rel: string, inactive: boolean): Promise<void> {
+  const abs = resolveInside(root, rel)
+  for (const name of [SECTION_META, GROUP_META]) {
+    const path = join(abs, name)
+    const meta = await readJson<SectionMeta | GroupMeta>(path)
+    if (!meta) continue
+    const { inactive: _was, ...rest } = meta
+    await writeJson(path, inactive ? { ...rest, inactive: true } : rest)
+    return
+  }
+  throw new Error(`Not a section or group: ${rel}`)
+}
+
+/**
+ * Mark pages of one section inactive (shown grey, at the end of the page list) or active again, by
+ * page ID in the section's section.json (`inactivePages`). The pages' own files are not touched.
+ */
+export async function setPagesInactive(root: string, sectionRel: string, pageIds: string[], inactive: boolean): Promise<void> {
+  const path = join(resolveInside(root, sectionRel), SECTION_META)
+  const meta = await readJson<SectionMeta>(path)
+  if (!meta) throw new Error(`Not a section: ${sectionRel}`)
+  const { inactivePages: was, ...rest } = meta
+  const ids = new Set(Array.isArray(was) ? was : [])
+  for (const id of pageIds) {
+    if (inactive) ids.add(id)
+    else ids.delete(id)
+  }
+  await writeJson(path, ids.size ? { ...rest, inactivePages: [...ids] } : rest)
 }
 
 export async function setChildOrder(root: string, containerRel: string, order: string[]): Promise<void> {

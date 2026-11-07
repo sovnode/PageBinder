@@ -14,7 +14,8 @@ import { readValidPage, writeRendered } from './storage/page'
 import { readJson } from './storage/notebook'
 import { renderPageHtml } from '../shared/render/renderPage'
 import { atomicWriteFile } from './storage/atomic'
-import type { PageDoc, SectionMeta, GroupMeta, NotebookMeta } from '../shared/types'
+import { arrangeContainers, arrangePages } from './storage/arrange'
+import type { PageDoc, SectionMeta, GroupMeta } from '../shared/types'
 
 export interface ExportedPage {
   dir: string
@@ -22,19 +23,16 @@ export interface ExportedPage {
   doc: PageDoc
 }
 
-async function orderOf(dir: string): Promise<string[]> {
-  const nb = await readJson<NotebookMeta>(join(dir, 'notebook.json'))
-  if (nb?.order) return nb.order
-  const g = await readJson<GroupMeta>(join(dir, 'group.json'))
-  if (g?.order) return g.order
-  const s = await readJson<SectionMeta>(join(dir, 'section.json'))
-  if (s?.pageOrder) return s.pageOrder
-  return []
-}
-
-function sortByOrder(names: string[], order: string[]): string[] {
-  const rank = new Map(order.map((n, i) => [n, i]))
-  return [...names].sort((a, b) => (rank.get(a) ?? 1e9) - (rank.get(b) ?? 1e9) || a.localeCompare(b, undefined, { numeric: true }))
+/** The folders inside `dir` in the order PageBinder shows them (arrange.ts): pages in a section, else sections and groups. */
+async function shownOrder(dir: string, names: string[]): Promise<string[]> {
+  const section = await readJson<SectionMeta>(join(dir, 'section.json'))
+  if (section) {
+    const inactive = new Set(Array.isArray(section.inactivePages) ? section.inactivePages : [])
+    const ids = new Map(await Promise.all(names.map(async (n) => [n, (await readJson<{ id?: unknown }>(join(dir, n, 'page.json')))?.id] as const)))
+    return arrangePages(names, Array.isArray(section.pageOrder) ? section.pageOrder : [], (n) => n, (n) => { const id = ids.get(n); return typeof id === 'string' && inactive.has(id) })
+  }
+  const metas = new Map(await Promise.all(names.map(async (n) => [n, (await readJson<SectionMeta>(join(dir, n, 'section.json'))) ?? (await readJson<GroupMeta>(join(dir, n, 'group.json')))] as const)))
+  return arrangeContainers(names, (n) => ({ name: metas.get(n)?.name ?? n, folder: n, inactive: !!metas.get(n)?.inactive }))
 }
 
 /** Regenerate page.html for every page under `dir` (notebook, group, section, or page) and return the pages in notebook order. */
@@ -52,7 +50,7 @@ export async function collectPages(dir: string, log: (s: string) => void = () =>
       return
     }
     const entries = (await fs.readdir(d, { withFileTypes: true })).filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'templates').map((e) => e.name)
-    for (const name of sortByOrder(entries, await orderOf(d))) await walk(join(d, name))
+    for (const name of await shownOrder(d, entries)) await walk(join(d, name))
   }
   await walk(dir)
   return out

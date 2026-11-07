@@ -48,7 +48,8 @@ describe('templates', () => {
     const { relPath, doc } = await createPage(tdir, fields, 'Field log')
     const listed = await listTemplates(tdir)
     expect(listed).toEqual([{ id: doc.id, ref: `template:${doc.id}`, name: 'Field log', section: 'Farm › Fields', rel: relPath }])
-    expect((await templateSections(tdir)).map((x) => x.name)).toEqual(['General', 'Farm › Fields'])
+    // Listed as the tabs show them: A to Z, so the group Farm comes before the section General.
+    expect((await templateSections(tdir)).map((x) => x.name)).toEqual(['Farm › Fields', 'General'])
     // A missing Templates notebook simply has no templates.
     expect(await listTemplates(join(dir, 'nowhere'))).toEqual([])
   })

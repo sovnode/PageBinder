@@ -199,6 +199,8 @@ export interface PageBinderApi {
     createGroup(containerRel: string, name: string): Promise<{ rel: string; tree: NotebookTree }>
     rename(rel: string, name: string): Promise<{ rel: string; tree: NotebookTree }>
     setColor(rel: string, color: string): Promise<NotebookTree>
+    /** Mark a section or group inactive (grey, after the active tabs) or active again. */
+    setInactive(rel: string, inactive: boolean): Promise<NotebookTree>
   }
   page: {
     /** `titleBlock`: start a blank page with the page name and creation date at the top. */
@@ -225,6 +227,8 @@ export interface PageBinderApi {
     copyFilesBetween(fromRel: string, toRel: string, items: { sub: 'images' | 'attachments'; name: string; originalName?: string }[], fromRoot?: string): Promise<{ sub: 'images' | 'attachments'; from: string; entry: FileEntry }[]>
     readAttachment(rel: string, sub: 'images' | 'attachments', name: string): Promise<ArrayBuffer>
     delete(rel: string): Promise<{ name: string; tree: NotebookTree }>
+    /** Mark pages of one section inactive (grey, at the end of the list) or active again, by page ID. */
+    setInactive(sectionRel: string, pageIds: string[], inactive: boolean): Promise<NotebookTree>
   }
   onMenu(channel: string, handler: () => void): () => void
 }

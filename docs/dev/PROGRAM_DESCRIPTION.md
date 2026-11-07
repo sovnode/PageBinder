@@ -160,13 +160,13 @@ Every file entering a page folder, whether dropped, pasted, or created by the he
 
 ```
 Farm records 2026/                    notebook folder
-  notebook.json                       notebook id, name, settings, section order
+  notebook.json                       notebook id, name, settings, section order (creation order; tabs show A to Z)
   .index/                             rebuildable cache, excluded from backup
     search.sqlite
   Site surveys/                       section group
     group.json
     North Field/                      section
-      section.json                    color, page order, default template
+      section.json                    color, page order, default template, inactive marks
       Lidar pass.page/                page folder
         page.json                     the page document (source of truth)
         page.html                     rendered copy, opens in any browser
@@ -289,7 +289,7 @@ This section has priority over convenience and performance. The design goal is t
 | Inline images and attachments | Source | One object on one page | NAS copy; page shows a missing-file card with expected name, size, and hash |
 | History snapshots (`.history/`) | Source, redundant | Older versions of one page | None needed; current page is unaffected |
 | Autosave draft (`page.json.autosave`) | Transient | Unsaved edits of one page | None needed after a clean save |
-| Section, group, and notebook metadata files | Source, small | Order, colors, names, default template of one level | Regenerated from the folder layout with defaults; only ordering and colors are lost |
+| Section, group, and notebook metadata files | Source, small | Order, colors, names, default template of one level | Regenerated from the folder layout with defaults; only ordering, colors, and inactive marks are lost |
 | Templates notebook (settings folder) | Source | Templates | Recycle folder and page history, as any notebook; copy the folder to back it up |
 | Recycle folder | Source | Deleted pages awaiting purge | NAS copy |
 | Search index and tree cache (`.index/`) | Cache | Nothing | Rebuilt automatically |
@@ -309,7 +309,7 @@ This section has priority over convenience and performance. The design goal is t
 
 - **Corrupt page document.** The app renames the damaged file with a `.corrupt` suffix, restores the newest history snapshot that parses and passes its checksum, opens it, and shows a notice naming the version it recovered. If a newer autosave draft exists it is offered as well. If no snapshot exists, the page opens empty with the notice and the damaged file is kept for manual inspection.
 - **Missing or mismatched attachment or image.** The page opens normally. The object is shown as a missing-file card with the expected filename, size, hash, and last known date so the user can find it on the NAS. Nothing else on the page is affected.
-- **Missing metadata file.** Section, group, and notebook metadata is regenerated from folder names with default order and colors, and a notice says what was rebuilt.
+- **Missing metadata file.** Section, group, and notebook metadata is regenerated from folder names with default order and colors (and no inactive marks), and a notice says what was rebuilt.
 - **Corrupt or missing search index.** The app runs SQLite's integrity check on open. On any failure it deletes the index and rebuilds it in the background. Search works on what has been indexed so far and shows a progress indicator. A partial rebuild interrupted by a crash is detected by a completion marker and restarted.
 - **Stale lock file.** A lock older than the process that created it is removed automatically.
 - **Page folder deleted outside the app.** The tree cache notices on the next open and drops the page. Recovery is from the recycle folder if the app deleted it, or from the NAS otherwise.

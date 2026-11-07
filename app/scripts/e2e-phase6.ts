@@ -60,6 +60,11 @@ async function main(): Promise<void> {
   useApp(app)
   shownPage = page
   await page.waitForSelector('.section-tabs')
+  // Tabs are A to Z (1.2.5): the group Archive, then Batch, Surveys, and Target.
+  const tabNames = await page.locator('.section-tabs .tab:not(.add)').allTextContents()
+  assert(JSON.stringify(tabNames.map((t) => t.replace('▣', '').trim())) === JSON.stringify(['Archive', 'Batch', 'Surveys', 'Target']), `sections and groups are shown A to Z (${tabNames.join(' | ')})`)
+  await page.locator('.section-tabs .tab', { hasText: /^Surveys$/ }).click()
+  await page.waitForSelector('.page-row:has-text("Survey form")')
 
   // 1. Save the page as a template (a copy in the Templates notebook), then make a page from it:
   //    the template keeps its placeholders, and the new page has them filled.
@@ -152,6 +157,10 @@ async function main(): Promise<void> {
   await page.locator('.dialog input').fill('Done')
   await page.locator('.dialog button[type=submit]').click()
   await page.waitForSelector('.tab.on:has-text("Done")')
+  await page.locator('.page-row.add').click()
+  await page.locator('.page-row.renaming input').fill('Done list')
+  await page.keyboard.press('Enter')
+  await page.waitForSelector('.page-row.on:has-text("Done list")')
 
   // 5. Move a section into a group, copy it back to the root, delete it, restore it.
   await page.locator('.tab', { hasText: 'Done' }).click({ button: 'right' })
@@ -170,11 +179,33 @@ async function main(): Promise<void> {
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.send('menu:recycle'))
   await page.waitForSelector('.recycle-row:has-text("Section")')
   await page.locator('.recycle-row', { hasText: 'Done' }).locator('button', { hasText: 'Restore' }).click()
-  await page.waitForTimeout(500)
+  // The restored section is shown as a section. Until 1.2.5 it was opened as a page, which wrote a
+  // stray page.json into its folder. Wait until the window has done one or the other.
+  const strayPage = join(root, 'Archive', 'Done', 'page.json')
+  const stray = (): Promise<boolean> => fs.stat(strayPage).then(() => true, () => false)
+  for (let i = 0; i < 100 && !(await page.locator('.tab.on', { hasText: 'Done' }).count()) && !(await stray()); i++) await page.waitForTimeout(100)
   assert(await fs.stat(join(root, 'Archive', 'Done', 'section.json')).then(() => true, () => false), 'section restored into its group')
+  assert(!(await stray()), 'restoring a section writes no page into its folder')
+  assert(await page.locator('.tab.on', { hasText: 'Done' }).count(), 'the restored section is opened')
+  await page.waitForSelector('.page-row.on:has-text("Done list")', { timeout: 5000 }).catch(() => undefined)
+  assert(await page.locator('.page-row.on', { hasText: 'Done list' }).count(), 'the restored section opens on its first page')
   await page.locator('.dialog button', { hasText: 'Close' }).click()
   await page.waitForSelector('.dialog', { state: 'detached' })
-  step('sections move between groups, and a deleted section can be restored')
+  // A restored section group opens with its sections, on the first one.
+  await page.locator('.crumb', { hasText: 'Phase 6 notebook' }).first().click()
+  await page.locator('.section-tabs .tab.group', { hasText: 'Archive' }).click({ button: 'right' })
+  await page.locator('.context-item', { hasText: 'Delete section group' }).click()
+  await page.locator('.dialog button[type=submit]').click()
+  await page.waitForSelector('.dialog', { state: 'detached' })
+  await page.waitForFunction(() => !Array.from(document.querySelectorAll('.section-tabs .tab')).some((t) => t.textContent?.includes('Archive')))
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.webContents.send('menu:recycle'))
+  await page.locator('.recycle-row', { hasText: /Group:\s*Archive/ }).locator('button', { hasText: 'Restore' }).click()
+  await page.waitForSelector('.crumb.current:has-text("Archive")', { timeout: 5000 }).catch(() => undefined)
+  const groupShown = await page.evaluate(() => ({ crumb: document.querySelector('.crumb.current')?.textContent ?? '', tabs: Array.from(document.querySelectorAll('.section-tabs .tab:not(.add)')).map((t) => t.textContent ?? ''), on: document.querySelector('.tab.on')?.textContent ?? '', page: document.querySelector('.page-row.on .page-title-text')?.textContent ?? '' }))
+  assert(groupShown.crumb.includes('Archive') && groupShown.tabs.join('|') === 'Done|Old' && groupShown.on === 'Done' && groupShown.page === 'Done list', `a restored group opens with its sections and its first page (${JSON.stringify(groupShown)})`)
+  await page.locator('.dialog button', { hasText: 'Close' }).click()
+  await page.waitForSelector('.dialog', { state: 'detached' })
+  step('sections move between groups, and a deleted section or group is restored and opened')
 
   // 6. Rubber-band selection: drag over two boxes, move them together, delete them together, undo both.
   await page.locator('.crumb', { hasText: 'Phase 6 notebook' }).first().click()
@@ -316,7 +347,77 @@ async function main(): Promise<void> {
   assert(JSON.stringify(await pages(batch)) === JSON.stringify(['Four.page', 'One.page', 'Three.page', 'Two.page']), `one undo moves both pages back (${await pages(batch)})`)
   step('a Ctrl/Cmd-clicked page stays highlighted, and cut pages move on paste with one undo')
 
+  // 10. Sections, groups, and pages are marked inactive from their right-click menus (the user's
+  //     request, 2026-11-07): they turn grey and move to the end, the tabs after the active ones (each
+  //     part A to Z), the pages after the others. The marks live in section.json and group.json;
+  //     the pages themselves are not touched.
+  const tabs = (p: Page): Promise<string> => p.locator('.section-tabs .tab:not(.add)').evaluateAll((els) => els.map((e) => `${e.classList.contains('inactive') ? '~' : ''}${(e.textContent ?? '').replace('▣', '').trim()}`).join(' '))
+  const rows = (p: Page): Promise<string[]> => p.locator('.page-row:not(.add)').evaluateAll((els) => els.map((e) => `${e.classList.contains('inactive') ? '~' : ''}${e.querySelector('.page-title-text')?.textContent ?? ''}`))
+  const settle = async <T>(read: () => Promise<T>, want: T, what: string): Promise<void> => {
+    let got = await read()
+    for (let i = 0; i < 40 && JSON.stringify(got) !== JSON.stringify(want); i++) {
+      await new Promise((done) => setTimeout(done, 50))
+      got = await read()
+    }
+    assert(JSON.stringify(got) === JSON.stringify(want), `${what} (shown: ${JSON.stringify(got)}, wanted ${JSON.stringify(want)})`)
+  }
+  const meta = async (rel: string, file: string): Promise<Record<string, unknown>> => JSON.parse(await fs.readFile(join(root, rel, file), 'utf8')) as Record<string, unknown>
+  const markTab = async (p: Page, name: string, label: 'Mark inactive' | 'Mark active'): Promise<void> => {
+    await p.locator('.section-tabs .tab', { hasText: new RegExp(`^(▣ )?${name}$`) }).click({ button: 'right' })
+    await p.locator('.context-item', { hasText: new RegExp(`^${label}$`) }).click()
+  }
+  await settle(() => tabs(page), 'Archive Batch Surveys Target', 'sections and groups are shown A to Z')
+  await markTab(page, 'Batch', 'Mark inactive')
+  await settle(() => tabs(page), 'Archive Surveys Target ~Batch', 'an inactive section moves after the active tabs')
+  const look = await page.locator('.section-tabs .tab', { hasText: /^Batch$/ }).evaluate((el) => ({ on: el.classList.contains('on'), color: getComputedStyle(el).color, border: getComputedStyle(el).borderTopColor }))
+  assert(look.on && look.color === 'rgb(138, 137, 131)' && look.border === 'rgb(196, 194, 187)', `the inactive tab is grey and stays open (${JSON.stringify(look)})`)
+  assert((await meta(batch, 'section.json'))['inactive'] === true, 'the mark is kept in section.json')
+  await markTab(page, 'Archive', 'Mark inactive')
+  await settle(() => tabs(page), 'Surveys Target ~Archive ~Batch', 'an inactive group joins the inactive tabs, A to Z')
+  assert((await meta(archive, 'group.json'))['inactive'] === true, 'the mark is kept in group.json')
+  // Pages: Batch is still open.
+  const batchRows = await rows(page)
+  const onePage = await fs.readFile(join(root, batch, 'One.page', 'page.json'), 'utf8')
+  await page.locator('.page-row', { hasText: /^One/ }).click({ button: 'right' })
+  await page.locator('.context-item', { hasText: /^Mark inactive$/ }).click()
+  await settle(() => rows(page), [...batchRows.filter((t) => t !== 'One'), '~One'], 'an inactive page moves to the end of the list')
+  const rowLook = await page.locator('.page-row', { hasText: /^One/ }).evaluate((el) => getComputedStyle(el).color)
+  assert(rowLook === 'rgb(138, 137, 131)', `the inactive page is grey (${rowLook})`)
+  const oneId = (JSON.parse(onePage) as PageDoc).id
+  assert(JSON.stringify((await meta(batch, 'section.json'))['inactivePages']) === JSON.stringify([oneId]), 'the page is listed as inactive in section.json, by its ID')
+  assert((await fs.readFile(join(root, batch, 'One.page', 'page.json'), 'utf8')) === onePage, 'the inactive page itself is not touched')
+  // Two pages at once, then one made active again; the inactive ones keep the section's order.
+  const [a, b] = batchRows.filter((t) => t !== 'One')
+  await page.locator('.page-row', { hasText: new RegExp(`^${a}`) }).click()
+  await page.locator('.page-row', { hasText: new RegExp(`^${b}`) }).click({ modifiers: [mod] })
+  await page.locator('.page-row', { hasText: new RegExp(`^${b}`) }).click({ button: 'right' })
+  await page.locator('.context-item', { hasText: /^Mark 2 pages inactive$/ }).click()
+  const marked = new Set(['One', a, b])
+  await settle(() => rows(page), [...batchRows.filter((t) => !marked.has(t)), ...batchRows.filter((t) => marked.has(t)).map((t) => `~${t}`)], 'two selected pages are marked inactive together')
+  await page.locator('.page-row', { hasText: /^One/ }).click({ button: 'right' })
+  await page.locator('.context-item', { hasText: /^Mark active$/ }).click()
+  marked.delete('One')
+  const shownBatch = [...batchRows.filter((t) => !marked.has(t)), ...batchRows.filter((t) => marked.has(t)).map((t) => `~${t}`)]
+  await settle(() => rows(page), shownBatch, 'a page marked active again goes back to its place')
+  // Opening the notebook's top level opens the first active section, not an inactive one.
+  await page.locator('.crumb', { hasText: 'Phase 6 notebook' }).first().click()
+  await page.waitForSelector('.tab.on:has-text("Surveys")')
+  // The marks hold when the notebook is opened again (the tree then comes from the index).
   await app.close()
+  const app2 = await electron.launch({ args: [resolve(process.env['E2E_OUT'] ?? 'out-e2e', 'main/index.js'), `--user-data-dir=${userData}`], cwd: resolve('.'), env: { ...process.env, PAGEBINDER_OPEN: root } })
+  const page2 = await app2.firstWindow()
+  useApp(app2)
+  shownPage = page2
+  await page2.waitForSelector('.section-tabs')
+  await settle(() => tabs(page2), 'Surveys Target ~Archive ~Batch', 'the inactive tabs stay at the end after reopening')
+  await page2.locator('.section-tabs .tab', { hasText: /^Batch$/ }).click()
+  await settle(() => rows(page2), shownBatch, 'the inactive pages stay at the end after reopening')
+  await markTab(page2, 'Batch', 'Mark active')
+  await settle(() => tabs(page2), 'Batch Surveys Target ~Archive', 'a section marked active again goes back to its alphabetical place')
+  assert(!('inactive' in (await meta(batch, 'section.json'))), 'marking a section active again removes the field')
+  step('sections, groups, and pages marked inactive turn grey and move to the end, and stay so when reopened')
+
+  await app2.close()
   process.stdout.write(`\nPASS. Notebook kept at ${root}\n`)
 }
 

@@ -34,9 +34,10 @@ import { listTemplates, saveAsTemplate, createPageFromTemplate, setSectionDefaul
 import { movePage, copyPage, moveContainer, copyContainer, recycleContainer } from './storage/copymove'
 import { readJson, writeJson } from './storage/notebook'
 import type { SectionMeta } from '../shared/types'
+import { promises as fs } from 'node:fs'
 import { dirname, basename, join as joinPath, resolve as resolvePath } from 'node:path'
-import { SECTION_META, PAGE_DOC } from './storage/paths'
-import { createSection, createGroup, renameContainer, setSectionColor } from './storage/section'
+import { SECTION_META, GROUP_META, PAGE_DOC } from './storage/paths'
+import { createSection, createGroup, renameContainer, setSectionColor, setContainerInactive, setPagesInactive } from './storage/section'
 import {
   createPage,
   loadPage,
@@ -215,6 +216,25 @@ async function afterContainerChange(...containerRels: string[]): Promise<Noteboo
   return currentTree()
 }
 
+/**
+ * Put a restored section's pages, or everything in a restored group, back into the index's tree, so
+ * the reply shows them and the window can open the first page or section (the page text follows with
+ * the background reconcile). Deleting removed all of it from the index.
+ */
+async function indexRestored(rel: string): Promise<void> {
+  if (!indexer) return
+  const abs = resolveInside(requireRoot(), rel)
+  if (await exists(joinPath(abs, SECTION_META))) {
+    await indexer.refreshSection(rel).catch(() => undefined)
+    return
+  }
+  if (!(await exists(joinPath(abs, GROUP_META)))) return
+  await indexer.refreshContainer(rel).catch(() => undefined)
+  for (const e of await fs.readdir(abs, { withFileTypes: true })) {
+    if (e.isDirectory() && !e.name.startsWith('.') && !e.name.endsWith('.page')) await indexRestored(`${rel}/${e.name}`)
+  }
+}
+
 function parentOf(rel: string): string {
   return rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : ''
 }
@@ -358,6 +378,16 @@ export function registerIpc(): void {
     const root = requireRoot()
     await setSectionColor(root, rel, color)
     return afterContainerChange(parentOf(rel))
+  })
+  ipcMain.handle('section:setInactive', async (_e, rel: string, inactive: boolean) => {
+    const root = requireRoot()
+    await setContainerInactive(root, rel, inactive)
+    return afterContainerChange(parentOf(rel))
+  })
+  ipcMain.handle('page:setInactive', async (_e, sectionRel: string, pageIds: string[], inactive: boolean) => {
+    const root = requireRoot()
+    await setPagesInactive(root, sectionRel, pageIds, inactive)
+    return afterSectionChange(sectionRel)
   })
 
   /* ---------- pages ---------- */
@@ -537,7 +567,7 @@ export function registerIpc(): void {
     const root = requireRoot()
     const rel = await restoreRecycled(root, name, fallbackSection)
     if (rel.endsWith('.page')) await indexArrivedPage(rel)
-    const tree = rel.endsWith('.page') ? await afterSectionChange(parentOf(rel)) : await afterContainerChange(parentOf(rel))
+    const tree = rel.endsWith('.page') ? await afterSectionChange(parentOf(rel)) : (await afterContainerChange(parentOf(rel)), await indexRestored(rel), await currentTree())
     if (!rel.endsWith('.page')) reconcileSoon()
     return { rel, tree }
   })

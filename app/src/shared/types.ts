@@ -56,7 +56,10 @@ export interface NotebookMeta {
   name: string
   created: string
   modified: string
-  /** Folder names of top-level sections and groups in display order. */
+  /**
+   * Folder names of top-level sections and groups, in the order they were created. Since 1.2.5 the
+   * tabs show them alphabetically (inactive ones last); the list is still kept, so 1.2.4 shows them as before.
+   */
   order: string[]
   settings: {
     paper: PaperSettings
@@ -70,8 +73,10 @@ export interface GroupMeta {
   id: string
   name: string
   created: string
-  /** Folder names of child sections and groups in display order. */
+  /** Folder names of child sections and groups, in the order they were created (see NotebookMeta.order). */
   order: string[]
+  /** Marked inactive: shown grey, after the active tabs. Optional: older groups lack it. */
+  inactive?: boolean
 }
 
 export interface SectionMeta {
@@ -80,9 +85,17 @@ export interface SectionMeta {
   name: string
   color: string
   created: string
-  /** Page folder names in display order. */
+  /** Page folder names in display order (inactive pages are shown after the others). */
   pageOrder: string[]
   defaultTemplate?: string
+  /** Marked inactive: shown grey, after the active tabs. Optional: older sections lack it. */
+  inactive?: boolean
+  /**
+   * IDs of the pages in this section marked inactive: shown grey, at the end of the page list. Kept
+   * here rather than in page.json so marking a page changes neither its history nor its last-edited
+   * date. Optional: older sections lack it.
+   */
+  inactivePages?: string[]
 }
 
 export interface FileEntry {
@@ -241,6 +254,8 @@ export interface PageRef {
   relPath: string
   modified: string
   parentPageId?: string
+  /** Marked inactive (SectionMeta.inactivePages). */
+  inactive?: boolean
 }
 
 export interface SectionNode {
@@ -251,6 +266,7 @@ export interface SectionNode {
   relPath: string
   pages: PageRef[]
   defaultTemplate?: string
+  inactive?: boolean
 }
 
 export interface GroupNode {
@@ -259,6 +275,7 @@ export interface GroupNode {
   name: string
   relPath: string
   children: TreeChild[]
+  inactive?: boolean
 }
 
 export type TreeChild = SectionNode | GroupNode

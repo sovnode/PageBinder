@@ -21,6 +21,7 @@ import {
   type PageDoc
 } from '../../shared/types'
 import { atomicWriteFile, exists, cleanTempFiles } from './atomic'
+import { arrangeContainers, arrangePages } from './arrange'
 import { newId, now } from './ids'
 import { sanitizeName, uniqueName } from './names'
 import {
@@ -163,17 +164,12 @@ export async function openNotebook(root: string): Promise<NotebookTree> {
     regenerated.push(NOTEBOOK_META)
   }
   await fs.mkdir(join(root, INDEX_DIR), { recursive: true })
-  const children = await scanContainer(root, root, meta.order, regenerated)
+  const children = await scanContainer(root, root, regenerated)
   return { root, meta, children, regenerated }
 }
 
-/** Scan a notebook root or a group folder for sections and groups. */
-export async function scanContainer(
-  root: string,
-  dir: string,
-  order: string[],
-  regenerated: string[]
-): Promise<TreeChild[]> {
+/** Scan a notebook root or a group folder for sections and groups, in the order they are shown (arrange.ts). */
+export async function scanContainer(root: string, dir: string, regenerated: string[]): Promise<TreeChild[]> {
   await cleanTempFiles(dir)
   const entries = await fs.readdir(dir, { withFileTypes: true })
   // A notebook's own "templates" folder, kept by earlier versions, is not a section.
@@ -213,7 +209,7 @@ export async function scanContainer(
       }
     }
   }
-  return sortByOrder(found, order, (c) => basename(c.relPath))
+  return arrangeContainers(found, (c) => ({ name: c.name, folder: basename(c.relPath), inactive: c.inactive }))
 }
 
 export const SCAN_CONCURRENCY = 32
@@ -252,7 +248,8 @@ async function scanGroup(root: string, dir: string, meta: GroupMeta, regenerated
     id: meta.id,
     name: meta.name,
     relPath: toRel(root, dir),
-    children: await scanContainer(root, dir, meta.order ?? [], regenerated)
+    children: await scanContainer(root, dir, regenerated),
+    ...(meta.inactive ? { inactive: true } : {})
   }
 }
 
@@ -260,15 +257,18 @@ async function scanSection(root: string, dir: string, meta: SectionMeta, _regene
   await cleanTempFiles(dir)
   const entries = await fs.readdir(dir, { withFileTypes: true })
   const pageDirs = entries.filter((e) => e.isDirectory() && e.name.endsWith(PAGE_SUFFIX)).map((e) => join(dir, e.name))
-  const pages = await mapLimit(pageDirs, SCAN_CONCURRENCY, (pageDir) => readPageRef(root, pageDir))
+  const refs = await mapLimit(pageDirs, SCAN_CONCURRENCY, (pageDir) => readPageRef(root, pageDir))
+  const inactive = new Set(Array.isArray(meta.inactivePages) ? meta.inactivePages : [])
+  const pages = refs.map((p) => (inactive.has(p.id) ? { ...p, inactive: true } : p))
   return {
     kind: 'section',
     id: meta.id,
     name: meta.name,
     color: meta.color,
     relPath: toRel(root, dir),
-    pages: sortByOrder(pages, meta.pageOrder ?? [], (p) => basename(p.relPath)),
-    ...(meta.defaultTemplate ? { defaultTemplate: meta.defaultTemplate } : {})
+    pages: arrangePages(pages, meta.pageOrder ?? [], (p) => basename(p.relPath), (p) => !!p.inactive),
+    ...(meta.defaultTemplate ? { defaultTemplate: meta.defaultTemplate } : {}),
+    ...(meta.inactive ? { inactive: true } : {})
   }
 }
 
@@ -292,18 +292,6 @@ export async function readPageRef(root: string, pageDir: string): Promise<PageRe
     /* ignore */
   }
   return { id: `folder:${toRel(root, pageDir)}`, title: folderTitle, relPath: toRel(root, pageDir), modified }
-}
-
-function sortByOrder<T>(items: T[], order: string[], key: (item: T) => string): T[] {
-  const rank = new Map(order.map((name, i) => [name, i]))
-  return [...items].sort((a, b) => {
-    const ra = rank.get(key(a))
-    const rb = rank.get(key(b))
-    if (ra !== undefined && rb !== undefined) return ra - rb
-    if (ra !== undefined) return -1
-    if (rb !== undefined) return 1
-    return key(a).localeCompare(key(b), undefined, { numeric: true, sensitivity: 'base' })
-  })
 }
 
 /**

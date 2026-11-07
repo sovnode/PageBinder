@@ -5,7 +5,7 @@ PageBinder keeps notes the way classic desktop OneNote did: notebooks, section g
 ## The first five minutes
 
 1. **Create a notebook.** File > New Notebook, choose a folder to hold it, and give it a name. A notebook is a folder; you can put it anywhere, including a folder that another program backs up.
-2. **Add a section.** Click + in the tab row. Sections are the coloured tabs. Right-click a tab to rename it, change its colour, or make a section group to keep related sections together.
+2. **Add a section.** Click + in the tab row. Sections are the coloured tabs. Right-click a tab to rename it, change its colour, or mark it inactive, and use + to make a section group that keeps related sections together. Tabs are shown in alphabetical order.
 3. **Add a page.** Click + in the page list on the right and type a name. Pages are listed by name; double-click a name to rename it later.
 4. **Write.** Click anywhere on the page to start a text box, then type. The toolbar has fonts, sizes, colours, alignment, lists, and tables. Drag a text box by the bar along its top edge. Escape selects the box so Delete removes it.
 5. **Add pictures and files.** Drop a picture or any file onto the page, paste one, or use Insert > Picture or Insert > File Attachment. Pictures show on the page; other files show as cards that open in their own application.

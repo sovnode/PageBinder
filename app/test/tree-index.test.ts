@@ -38,8 +38,8 @@ describe('tree from the index', () => {
     applyTreeToIndex(index, scanned)
     const fromIndex = treeFromIndex(index, root, scanned.meta)!
     expect(shape(fromIndex)).toBe(shape(scanned))
-    expect(shape(fromIndex)).toBe('Site surveys[Ridge Road() North Field(Survey plan,Lidar pass)] Home(Welcome)')
-    const north = (fromIndex.children[0] as { children: NotebookTree['children'] }).children[1]!
+    expect(shape(fromIndex)).toBe('Home(Welcome) Site surveys[North Field(Survey plan,Lidar pass) Ridge Road()]')
+    const north = (fromIndex.children[1] as { children: NotebookTree['children'] }).children[0]!
     expect(north.kind === 'section' && north.color).toBe('#D85A30')
 
     // Changes on disk, then targeted refreshes instead of a full scan.
@@ -52,18 +52,18 @@ describe('tree from the index', () => {
     await setSectionColor(root, s2, '#000000')
     await refreshContainer(index, root, g)
     const t2 = treeFromIndex(index, root, scanned.meta)!
-    const n2 = (t2.children[0] as { children: NotebookTree['children'] }).children[1]!
+    const n2 = (t2.children[1] as { children: NotebookTree['children'] }).children[0]!
     expect(n2.kind === 'section' && n2.color).toBe('#000000')
     const renamed = await renameContainer(root, s1, 'Ridge Road East')
     index.removeUnder(s1)
     await refreshContainer(index, root, g)
     await refreshSection(index, root, renamed)
-    expect(shape(treeFromIndex(index, root, scanned.meta)!)).toBe('Site surveys[Ridge Road East() North Field(Survey plan,Lidar pass)] Home(Welcome)')
+    expect(shape(treeFromIndex(index, root, scanned.meta)!)).toBe('Home(Welcome) Site surveys[North Field(Survey plan,Lidar pass) Ridge Road East()]')
 
     // A full reconcile from a scan corrects anything the refreshes missed.
     await fs.rm(join(root, home), { recursive: true })
     applyTreeToIndex(index, await openNotebook(root))
-    expect(shape(treeFromIndex(index, root, scanned.meta)!)).toBe('Site surveys[Ridge Road East() North Field(Survey plan,Lidar pass)]')
+    expect(shape(treeFromIndex(index, root, scanned.meta)!)).toBe('Site surveys[North Field(Survey plan,Lidar pass) Ridge Road East()]')
     index.close()
   })
 })

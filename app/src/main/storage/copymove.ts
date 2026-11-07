@@ -14,6 +14,7 @@ import { sanitizeName, uniqueName } from './names'
 import { copyDir } from './copy'
 import { withChecksum } from './checksum'
 import { writeRendered } from './page'
+import { setPagesInactive } from './section'
 import { GROUP_META, NOTEBOOK_META, PAGE_DOC, PAGE_SUFFIX, SECTION_META, RECYCLE_DIR, resolveInside, toRel } from './paths'
 import { timestampForFileName } from './ids'
 
@@ -48,10 +49,23 @@ export async function movePage(root: string, pageRel: string, targetSectionRel: 
   if (fromSection === targetSectionRel) return pageRel
   const targetAbs = resolveInside(root, targetSectionRel)
   const folder = await uniqueName(targetAbs, basename(src).slice(0, -PAGE_SUFFIX.length), PAGE_SUFFIX)
+  const id = (await readJson<PageDoc>(join(src, PAGE_DOC)))?.id
   await renameDurable(src, join(targetAbs, folder))
   await editPageOrder(root, fromSection, (o) => o.filter((n) => n !== basename(src)))
   await editPageOrder(root, targetSectionRel, (o) => [...o, folder])
+  // The page keeps its mark: inactive stays inactive, and an active page stays active even if the
+  // target still lists its ID from an earlier stay there (a delete keeps the ID, for a restore).
+  if (id) {
+    const was = (await inactivePageIds(root, fromSection)).includes(id)
+    if (was) await setPagesInactive(root, fromSection, [id], false)
+    if (was || (await inactivePageIds(root, targetSectionRel)).includes(id)) await setPagesInactive(root, targetSectionRel, [id], was)
+  }
   return `${targetSectionRel}/${folder}`
+}
+
+async function inactivePageIds(root: string, sectionRel: string): Promise<string[]> {
+  const meta = await readJson<SectionMeta>(join(resolveInside(root, sectionRel), SECTION_META))
+  return Array.isArray(meta?.inactivePages) ? meta.inactivePages : []
 }
 
 /**
@@ -100,10 +114,10 @@ export async function moveContainer(root: string, rel: string, targetContainerRe
 }
 
 async function freshenIds(dir: string): Promise<void> {
-  const section = await readJson<SectionMeta>(join(dir, SECTION_META))
-  if (section) await writeJson(join(dir, SECTION_META), { ...section, id: newId(), created: now() })
   const group = await readJson<GroupMeta>(join(dir, GROUP_META))
   if (group) await writeJson(join(dir, GROUP_META), { ...group, id: newId(), created: now() })
+  // Pages get new IDs, so a section's list of inactive pages is rewritten with them.
+  const renamed = new Map<string, string>()
   for (const entry of await fs.readdir(dir, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name.startsWith('.')) continue
     const child = join(dir, entry.name)
@@ -113,10 +127,17 @@ async function freshenIds(dir: string): Promise<void> {
       const doc = await readJson<PageDoc>(join(child, PAGE_DOC))
       if (doc) {
         const fresh = withChecksum({ ...doc, id: newId(), created: now(), modified: now() })
+        renamed.set(doc.id, fresh.id)
         await writeJson(join(child, PAGE_DOC), fresh)
         await writeRendered(child, fresh)
       }
     } else await freshenIds(child)
+  }
+  const section = await readJson<SectionMeta>(join(dir, SECTION_META))
+  if (section) {
+    const { inactivePages, ...rest } = section
+    const kept = Array.isArray(inactivePages) ? inactivePages.flatMap((id) => (renamed.has(id) ? [renamed.get(id)!] : [])) : []
+    await writeJson(join(dir, SECTION_META), { ...rest, id: newId(), created: now(), ...(kept.length ? { inactivePages: kept } : {}) })
   }
 }
 

@@ -5,7 +5,7 @@ import { renderPdfPages } from './pdfPrintout'
 import { paperPixels } from './paper'
 import { ActiveEditorProvider, useActiveEditor } from './editorContext'
 import type { Editor } from '@tiptap/react'
-import { childrenOf, findSection, groupPath, firstSection, parentGroupRel, retitlePage } from './tree'
+import { childrenOf, findNode, findSection, groupPath, firstSection, parentGroupRel, retitlePage } from './tree'
 import { withTitleFromText } from '@shared/pageTitle'
 import { Welcome } from './components/Welcome'
 import { NotebookPropertiesDialog } from './components/NotebookPropertiesDialog'
@@ -149,7 +149,8 @@ export function App(): JSX.Element {
     setCopiedPages((c) => (c && c.root === treeRef.current?.root && c.pages.some((p) => p.relPath === from) ? { ...c, pages: c.pages.map((p) => (p.relPath === from ? { ...p, relPath: to } : p)) } : c))
   }
 
-  const fail = (err: unknown): void => setError(err instanceof Error ? err.message : String(err))
+  // Errors from the main process arrive as "Error invoking remote method 'x': Error: message".
+  const fail = (err: unknown): void => setError((err instanceof Error ? err.message : String(err)).replace(/^Error invoking remote method '[^']*': (?:\w*Error: )?/, ''))
 
   const refreshTemplates = useCallback(async (): Promise<void> => {
     try {
@@ -636,6 +637,25 @@ export function App(): JSX.Element {
   const setColor = async (rel: string, color: string): Promise<void> => {
     try {
       setTree(await window.pagebinder.section.setColor(rel, color))
+    } catch (err) {
+      fail(err)
+    }
+  }
+
+  /** Mark a section or group inactive (grey, after the active tabs) or active again. */
+  const setContainerInactive = async (node: TreeChild, inactive: boolean): Promise<void> => {
+    try {
+      setTree(await window.pagebinder.section.setInactive(node.relPath, inactive))
+    } catch (err) {
+      fail(err)
+    }
+  }
+
+  /** Mark pages of the open section inactive (grey, at the end of the list) or active again. */
+  const setPagesInactive = async (pages: PageRef[], inactive: boolean): Promise<void> => {
+    if (!sectionRel) return
+    try {
+      setTree(await window.pagebinder.page.setInactive(sectionRel, pages.map((p) => p.id), inactive))
     } catch (err) {
       fail(err)
     }
@@ -1216,18 +1236,27 @@ export function App(): JSX.Element {
   const restoreRecycled = async (name: string): Promise<void> => {
     const t = tree
     if (!t) return
-    const fallback = sectionRel ?? firstSection(childrenOf(t, groupRel))?.relPath ?? firstSection(t.children)?.relPath
-    if (!fallback) {
-      setError('Create a section first, then restore the page into it.')
-      return
-    }
+    // Only a page whose section is gone needs somewhere to go; the main process says so if there is none.
+    const fallback = sectionRel ?? firstSection(childrenOf(t, groupRel))?.relPath ?? firstSection(t.children)?.relPath ?? ''
     try {
       const { rel, tree: next } = await window.pagebinder.recycle.restore(name, fallback)
       setTree(next)
-      const sec = rel.slice(0, rel.lastIndexOf('/'))
-      setGroupRel(parentGroupRel(sec))
-      setSectionRel(sec)
-      await openPage(rel)
+      if (rel.endsWith('.page')) {
+        const sec = rel.slice(0, rel.lastIndexOf('/'))
+        setGroupRel(parentGroupRel(sec))
+        setSectionRel(sec)
+        await openPage(rel)
+        return
+      }
+      // A section or group: show it. Until 1.2.5 it was opened as if it were a page, which left a
+      // stray empty page.json in its folder (found 2026-11-07).
+      await savePage()
+      if (findNode(next.children, rel)?.kind === 'group') {
+        await navigateGroup(next, rel)
+      } else {
+        setGroupRel(parentGroupRel(rel))
+        await selectSection(next, rel)
+      }
     } catch (err) {
       fail(err)
     }
@@ -1748,6 +1777,7 @@ export function App(): JSX.Element {
           onAddGroup={addGroup}
           onRename={renameNode}
           onSetColor={(rel, c) => void setColor(rel, c)}
+          onSetInactive={(node, inactive) => void setContainerInactive(node, inactive)}
           templates={templates}
           onSetDefaultTemplate={(rel, ref) => void window.pagebinder.template.setSectionDefault(rel, ref).then(setTree).catch(fail)}
           onMoveCopy={(node) => setMoveCopy({ mode: 'container', node })}
@@ -1873,6 +1903,7 @@ export function App(): JSX.Element {
             onCutPages={(pages) => setCopiedPages({ pages, root: tree.root, cut: true })}
             cutRels={copiedPages?.cut && copiedPages.root === tree.root ? new Set(copiedPages.pages.map((p) => p.relPath)) : null}
             onDeletePages={deletePages}
+            onSetInactive={(pages, inactive) => void setPagesInactive(pages, inactive)}
             onPastePage={() => void pastePage()}
             copiedPageTitle={copiedPages && (copiedPages.root === tree.root || !copiedPages.cut) ? (copiedPages.pages.length === 1 ? copiedPages.pages[0]!.title || 'Untitled page' : `${copiedPages.pages.length} ${templateMode ? 'templates' : 'pages'}`) : null}
           />

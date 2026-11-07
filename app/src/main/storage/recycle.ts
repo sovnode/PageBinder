@@ -90,6 +90,8 @@ export async function restoreRecycled(root: string, name: string, fallbackSectio
   let sectionAbs = resolveInside(root, sectionRel)
   const hasSection = await readJson<SectionMeta>(join(sectionAbs, SECTION_META))
   if (!hasSection) {
+    // Its section is gone: into the fallback, which must be a section (never the notebook's top folder).
+    if (!fallbackSection || !(await readJson<SectionMeta>(join(resolveInside(root, fallbackSection), SECTION_META)))) throw new Error('Create a section first, then restore the page into it.')
     sectionRel = fallbackSection
     sectionAbs = resolveInside(root, sectionRel)
   }

@@ -225,13 +225,27 @@ async function main(): Promise<void> {
   await page.waitForSelector('.context-menu')
   assert((await strip()).scrollLeft === 0, 'pressing the + leaves the tabs where they are')
   await page.locator('.context-item', { hasText: /^New section…$/ }).click()
-  await page.locator('.dialog input').fill('Added at the end')
+  // Tabs are shown A to Z (1.2.5), so this one goes at the end.
+  await page.locator('.dialog input').fill('Zone, added at the end')
   await page.locator('.dialog button[type=submit]').click()
-  await page.waitForSelector('.tab.on:has-text("Added at the end")')
+  await page.waitForSelector('.tab.on:has-text("Zone, added at the end")')
   s = await strip()
   assert(s.on && s.on.left >= s.left && s.on.right <= s.add.left && s.on.onTop, `the new section's tab is brought into view, clear of the + (${JSON.stringify(s)})`)
   assert(!s.covering && s.add.left - s.lastTabRight < 4, `at the end of the strip the + follows the last tab (${JSON.stringify(s)})`)
-  step('with many sections the + stays in view, and a section added with it is shown')
+  // One that sorts into the middle of the strip is brought into view there.
+  await page.mouse.click((s.add.left + s.add.right) / 2, s.add.bottom - 10)
+  await page.locator('.context-item', { hasText: /^New section…$/ }).click()
+  await page.locator('.dialog input').fill('Section number 20b')
+  await page.locator('.dialog button[type=submit]').click()
+  await page.waitForSelector('.tab.on:has-text("Section number 20b")')
+  s = await strip()
+  const between = await page.evaluate(() => Array.from(document.querySelectorAll('.section-tabs .tab:not(.add)')).map((t) => t.textContent ?? ''))
+  const at = between.indexOf('Section number 20b')
+  assert(between[at - 1] === 'Section number 20' && between[at + 1] === 'Section number 21', `a new section takes its alphabetical place (${between.slice(at - 1, at + 2).join(' | ')})`)
+  assert(s.on && s.on.left >= s.left && s.on.right <= s.add.left && s.on.onTop && s.covering, `a new section in the middle of the strip is brought into view, clear of the + (${JSON.stringify(s)})`)
+  await page.locator('.section-tabs .tab', { hasText: /^Zone, added at the end$/ }).click()
+  await page.waitForSelector('.tab.on:has-text("Zone, added at the end")')
+  step('with many sections the + stays in view, and a section added with it is shown in its alphabetical place')
 
   // Scrolled back to the start, the + is still there; the open tab comes back into view when the
   // notebook is opened again (on its last page, so the new section gets one).
@@ -245,7 +259,7 @@ async function main(): Promise<void> {
   assert(s.addOnTop && s.add.right <= s.right && s.covering, `the + stays at the right end when scrolled back (${JSON.stringify(s)})`)
   await close()
   ;({ app, page, close } = await launch(many))
-  await page.waitForSelector('.tab.on:has-text("Added at the end")')
+  await page.waitForSelector('.tab.on:has-text("Zone, added at the end")')
   s = await strip()
   assert(s.on && s.on.left >= s.left && s.on.right <= s.add.left && s.on.onTop, `on reopening, the open section's tab is in view (${JSON.stringify(s)})`)
   // Renaming a tab that is not open leaves the strip where the user scrolled it.
@@ -319,6 +333,18 @@ async function main(): Promise<void> {
     return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
   })
   assert(tall.scrollTop === 0 && tall.scrollHeight === tall.clientHeight, `the tabs strip does not scroll up and down (${JSON.stringify(tall)})`)
+  // Marking the open section inactive moves its tab to the end of the strip, and back again when marked
+  // active: either way it is brought into view (1.2.5).
+  for (const label of ['Mark inactive', 'Mark active']) {
+    const name = (await page.locator('.tab.on').textContent()) ?? ''
+    await page.locator('.tab.on').click({ button: 'right' })
+    await page.locator('.context-item', { hasText: new RegExp(`^${label}$`) }).click()
+    await page.waitForFunction((want) => !!document.querySelector('.tab.on') && document.querySelector('.tab.on')!.classList.contains('inactive') === want, label === 'Mark inactive')
+    s = await strip()
+    const last = await page.evaluate(() => Array.from(document.querySelectorAll('.section-tabs .tab:not(.add)')).pop()?.textContent ?? '')
+    assert(label === 'Mark active' || last === name, `an inactive section goes to the end of the strip (${last})`)
+    assert(s.on && s.on.left >= s.left && s.on.right <= s.add.left && s.on.onTop, `after ${label}, the open section's tab is brought into view (${JSON.stringify(s)})`)
+  }
   // In a section group with only a few sections, the + sits straight after the last tab.
   await page.locator('.tab.group', { hasText: 'Small group' }).click()
   await page.waitForSelector('.section-tabs .tab:has-text("Inside two")')

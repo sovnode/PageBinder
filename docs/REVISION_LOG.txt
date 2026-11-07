@@ -10,6 +10,15 @@ versions before it. Nothing ever needs converting.
 Version 1.2.5 - in development (not yet released)
 -------------------------------------------------
 
+- Sections and section groups are shown in alphabetical order, in every
+  notebook. Pages keep their own order.
+- Right-click a section tab, a section group tab, or a page and choose Mark
+  inactive. It turns grey and moves to the end of its list, after the
+  active ones; everything else about it works as before. Choose Mark active
+  to bring it back. Several selected pages can be marked at once.
+- Restoring a section or section group from File > Recycled Pages now
+  opens it. Before, nothing opened.
+
 
 Version 1.2.4 - 1 November 2026
 -------------------------------

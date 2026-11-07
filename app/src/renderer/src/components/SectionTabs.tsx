@@ -4,6 +4,9 @@ import { SECTION_COLORS, type TreeChild } from '@shared/types'
 import { ContextMenu, type MenuItem } from './ContextMenu'
 import type { TemplateInfo } from '../../../preload/api'
 
+/** The top border of an inactive tab, in place of its section colour. */
+const INACTIVE_GREY = '#c4c2bb'
+
 export function SectionTabs({
   children,
   activeSectionRel,
@@ -16,6 +19,7 @@ export function SectionTabs({
   templates,
   onSetDefaultTemplate,
   onMoveCopy,
+  onSetInactive,
   onDelete,
   templateMode
 }: {
@@ -30,6 +34,8 @@ export function SectionTabs({
   templates: TemplateInfo[]
   onSetDefaultTemplate: (rel: string, ref: string | null) => void
   onMoveCopy: (node: TreeChild) => void
+  /** Mark a section or group inactive (grey, after the active tabs) or active again. */
+  onSetInactive: (node: TreeChild, inactive: boolean) => void
   onDelete: (node: TreeChild) => void
   /** The Templates notebook is open: its sections take no default template. */
   templateMode?: boolean
@@ -69,16 +75,18 @@ export function SectionTabs({
     else if (t.left >= right) strip.scrollLeft += t.right - right + 8
     else if (t.right > right) strip.scrollLeft += t.right - right
   }
-  // Bring the open section's tab into view when another section is opened or the open one's tab is
-  // new: a new section is added at the end, which may be out of sight. Other changes to the tabs
+  // Bring the open section's tab into view when another section is opened, when the open one's tab is
+  // new (a new section takes its alphabetical place, which may be out of sight), or when the open one
+  // is marked inactive or active, which moves its tab to the end or back. Other changes to the tabs
   // (renaming, copying, or deleting another one) leave the strip where the user scrolled it.
-  const shown = useRef<{ active: string | null | undefined; tabs: string[] }>({ active: undefined, tabs: [] })
-  const tabsKey = children.map((c) => c.relPath).join('\n')
+  const shown = useRef<{ active: string | null | undefined; tabs: string[]; activeInactive: boolean }>({ active: undefined, tabs: [], activeInactive: false })
+  const tabsKey = children.map((c) => `${c.relPath}${c.inactive ? '~' : ''}`).join('\n')
   useLayoutEffect(() => {
     const before = shown.current
-    shown.current = { active: activeSectionRel, tabs: children.map((c) => c.relPath) }
+    const activeInactive = !!children.find((c) => c.relPath === activeSectionRel)?.inactive
+    shown.current = { active: activeSectionRel, tabs: children.map((c) => c.relPath), activeInactive }
     const tab = stripRef.current?.querySelector<HTMLElement>('.tab.on')
-    if (tab && activeSectionRel && (activeSectionRel !== before.active || !before.tabs.includes(activeSectionRel))) reveal(tab)
+    if (tab && activeSectionRel && (activeSectionRel !== before.active || !before.tabs.includes(activeSectionRel) || activeInactive !== before.activeInactive)) reveal(tab)
     measure()
   }, [activeSectionRel, tabsKey])
 
@@ -90,6 +98,7 @@ export function SectionTabs({
     ? [
         { label: 'Rename…', onClick: () => onRename(menu.node.relPath) },
         { label: 'Move or copy…', onClick: () => onMoveCopy(menu.node) },
+        { label: menu.node.inactive ? 'Mark active' : 'Mark inactive', onClick: () => onSetInactive(menu.node, !menu.node.inactive) },
         ...(menu.node.kind === 'section'
           ? [
               { separator: true },
@@ -122,8 +131,9 @@ export function SectionTabs({
           <button
             key={node.relPath}
             type="button"
-            className={`tab${node.relPath === activeSectionRel ? ' on' : ''}`}
-            style={{ borderTopColor: node.color }}
+            className={`tab${node.relPath === activeSectionRel ? ' on' : ''}${node.inactive ? ' inactive' : ''}`}
+            style={{ borderTopColor: node.inactive ? INACTIVE_GREY : node.color }}
+            title={node.inactive ? 'Inactive section (right-click to mark it active)' : undefined}
             onClick={(e) => {
               reveal(e.currentTarget)
               onSelectSection(node.relPath)
@@ -140,15 +150,15 @@ export function SectionTabs({
           <button
             key={node.relPath}
             type="button"
-            className="tab group"
-            style={{ borderTopColor: '#7F77DD' }}
+            className={`tab group${node.inactive ? ' inactive' : ''}`}
+            style={{ borderTopColor: node.inactive ? INACTIVE_GREY : '#7F77DD' }}
             onClick={() => onOpenGroup(node.relPath)}
             onDoubleClick={() => onRename(node.relPath)}
             onContextMenu={(e) => {
               e.preventDefault()
               setMenu({ x: e.clientX, y: e.clientY, node })
             }}
-            title="Section group"
+            title={node.inactive ? 'Inactive section group (right-click to mark it active)' : 'Section group'}
           >
             <span className="folder-icon">▣</span> {node.name}
           </button>
