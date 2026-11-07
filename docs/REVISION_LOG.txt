@@ -7,8 +7,8 @@ Each version opens, shows, edits, prints, and searches notebooks made by the
 versions before it. Nothing ever needs converting.
 
 
-Version 1.2.5 - in development (not yet released)
--------------------------------------------------
+Version 1.2.5 - 7 November 2026
+-------------------------------
 
 - Sections and section groups are shown in alphabetical order, in every
   notebook. Pages keep their own order.
